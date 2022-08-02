@@ -39,7 +39,11 @@
     "isbot": "^3.5.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "tiny-invariant": "^1.2.0"
+    "react-hook-form": "^7.34.0",
+    "remix-domains": "^0.3.2",
+    "remix-forms": "^0.17.4-test.0",
+    "tiny-invariant": "^1.2.0",
+    "zod": "^3.17.10"
   },
   "devDependencies": {
     "@faker-js/faker": "^7.3.0",

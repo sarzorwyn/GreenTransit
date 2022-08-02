@@ -10,7 +10,7 @@ export default function Index() {
   }
 
   return (
-    <div className="bg-gray-50 flex h-screen justify-center items-center animate-none">
+    <div className="bg-gray-50 flex h-screen justify-center items-center">
       <img src="/images/winter-train.jpg" alt="" className="w-full h-full object-cover blur-md bg-black/30"></img> 
       <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:py-16 lg:px-8 lg:flex lg:items-center lg:justify-between absolute rounded-3xl shadow-lg bg-blue-100">
         <h2>
