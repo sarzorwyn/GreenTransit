@@ -24,7 +24,7 @@ export default function Index() {
         </h2>
         <div className="mt-8 flex lg:mt-0 ml-12 lg:flex-shrink-0">
           <div className="inline-flex rounded-md shadow">
-            <a href="maps" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transform transition-all hover:scale-105" onClick={mainPageTransition}> Let's Go! </a>
+            <a href="maps" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transform transition-all hover:scale-105"> Let's Go! </a>
           </div>
           <div className="ml-3 inline-flex rounded-md shadow">
             <a href="#" className="inline-flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50 transform transition-all hover:scale-105"> Learn more </a>
