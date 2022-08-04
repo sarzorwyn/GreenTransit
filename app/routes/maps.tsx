@@ -1,7 +1,8 @@
-import { Autocomplete, DirectionsRenderer, GoogleMap, Marker, useJsApiLoader, useLoadScript } from "@react-google-maps/api";
+import { Autocomplete, DirectionsRenderer, DirectionsService, GoogleMap, Marker, Polyline, useJsApiLoader, useLoadScript } from "@react-google-maps/api";
 import { ActionFunction, LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
+import { string } from "zod";
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.GOOGLEMAPS_API_KEY;
@@ -25,65 +26,90 @@ export default function Maps() {
     const [map, setMap] = useState<google.maps.Map>();
     const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult>();
     // const [searchParams, setSearchParams] = useSearchParams();
-    const [distance, setDistance] = useState('');
-    const [duration, setDuration] = useState('');
+    const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
 
+    const distance = useRef(0);
+    const duration = useRef(0);
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
+    const userMarker = useRef<google.maps.Marker>();
+
+    const directionService = useRef<google.maps.DirectionsService>();
     
     const center = { lat: 1.361534, lng: 103.815990 }
 
     const restrictions:google.maps.places.ComponentRestrictions | undefined = {country:'sg'}; // I can't afford a worldwide search for the api :(
-    
-    // let bounds: google.maps.LatLngBounds | undefined;
-    // useEffect(() => {
-    //     if (map !== undefined) {
-    //         bounds = map.getBounds();
-    //         console.log(bounds)
-    //     }
-    // }, [map])
-    
-
-    // const calcBounds = () => {
-    //     if (map === undefined) {
-    //         return;
-    //     }
-    //     const timer = setTimeout(() => {bounds = map.getBounds();
-    //         }, 3000)
-    //     return () => clearTimeout(timer)
-    // }
 
     const calculateRoute = async () => {
         if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '') {
-            console.log('test')
             return;
         }
-        console.log('ok')
-        // clearRoute();
-        const directionService = new google.maps.DirectionsService();
-        const results = await directionService.route({
+        if (directionService.current === undefined) {
+            directionService.current = new google.maps.DirectionsService();
+        }
+
+
+        const results = await directionService.current.route({
             origin: startRef.current.value,
             destination: endRef.current.value,
             travelMode: google.maps.TravelMode.DRIVING,
+
+        }, (response, status) => {
+            if (status === 'OK' && response !== null) {
+                setDirectionsResponse(response);
+                if (routePolyline) {
+                    // if we have an existing routePolyline we unset it
+                    setRoutePolyline(undefined);
+                }
+                setRoutePolyline({
+                    path: response!.routes[0].overview_path,
+                    strokeColor: 'purple',
+                    strokeOpacity: 1.0,
+                    strokeWeight: 5,
+                    map: map,
+                });
+            }
         });
-        setDirectionsResponse(results);
-        setDistance(results.routes[0].legs[0].distance!.text);
-        setDuration(results.routes[0].legs[0].duration!.text);
+        
+        // setDirectionsResponse(results);
+        // setDistance(results.routes[0].legs[0].distance!.text);
+        // setDuration(results.routes[0].legs[0].duration!.text);
     }
 
-    const clearRoute = () => {
-        setDirectionsResponse(undefined);
-        setDistance('');
-        setDuration('');
-        // startRef.current!.value = '';
-        // endRef.current!.value = '';
+    const getNameFromCoordinates = (latLng: google.maps.LatLng | null) : Promise<string> => {
+        return geocoder.geocode({ location: latLng }).then((response) => {
+            if (response.results[0]) {
+                return response.results[0].formatted_address;
+            } else {
+                return String(latLng);
+            } 
+        }).catch(() => String(latLng));
     }
     
+    const dropMarker = async (e: google.maps.MapMouseEvent) => {
+        if (startRef.current !== null && startRef.current.value === '') {
+            startRef.current.value = await getNameFromCoordinates(e.latLng);
+        } else if (endRef.current !== null && endRef.current.value === '') {
+            endRef.current.value = await getNameFromCoordinates(e.latLng);
+        } else {
+            if (userMarker.current === undefined) {
+                userMarker.current = new google.maps.Marker({
+                    position: e.latLng,
+                    map: map,
+                    label: 'A'
+                });
+            }
+            userMarker.current.setPosition(e.latLng);
+        }
+    }
 
     if (!isLoaded ) {
         return <div/>;
     }
 
+    // geocoder needs to be init after map is loaded
+    const geocoder = new google.maps.Geocoder();
+//polylineOptions={routePolyline}
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
         <div className="w-full h-full z-0">
@@ -99,28 +125,30 @@ export default function Maps() {
                 fullscreenControl: false
                 }}
                 onLoad={m => setMap(m)}
+                onClick={e => dropMarker(e)}
             >
-                {(directionsResponse &&
-                    <DirectionsRenderer directions={directionsResponse} />
-                )}
+                {/* {(directionsResponse &&
+                    <DirectionsRenderer directions={directionsResponse} options={{polylineOptions: routePolyline }} onDirectionsChanged={()=>console.log(re)} ref={re}/>
+                )} */}
+                <Polyline options={routePolyline }></Polyline>
             </GoogleMap>
         </div>
         <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
-            <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-4">
+            <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
                 <div className="md:mr-4">
-                    <label className="block text-gray-700 text-sm font-bold sm:mb-2" htmlFor="origin">
+                    <label className="block text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
                         Origin
                     </label>
                     <Autocomplete restrictions={restrictions}>
-                        <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Start Point" ref={startRef}/>
+                        <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
                     </Autocomplete>
                 </div>
                 <div className="">
-                    <label className="block text-gray-700 text-sm font-bold sm:mb-2" htmlFor="destination">
+                    <label className="block text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
                         Destination
                     </label>
                     <Autocomplete restrictions={restrictions}>
-                        <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="End Point" type="text" placeholder="End Point" ref={endRef}/>
+                        <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="End Point" type="text" placeholder="Enter end point" ref={endRef}/>
                     </Autocomplete>
                 </div>
             </div>
