@@ -1,12 +1,14 @@
 import { Switch } from "@headlessui/react";
 import { Autocomplete, DirectionsRenderer, DirectionsService, GoogleMap, Marker, Polyline, useJsApiLoader, useLoadScript } from "@react-google-maps/api";
+import Map, {AttributionControl} from 'react-map-gl';
 import { ActionFunction, LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
+import 'mapbox-gl/dist/mapbox-gl.css';
 import { string } from "zod";
 
 export async function loader({ request }: LoaderArgs) {
-    return process.env.GOOGLEMAPS_API_KEY;
+    return process.env.MAPBOX_API_KEY;
 }
 
 declare type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
@@ -25,11 +27,16 @@ export default function Maps() {
         googleMapsApiKey: apiKey,
         libraries: libraries,
     });
-    const [map, setMap] = useState<google.maps.Map>();
     const [mapSelector, setMapSelector] = useState<string>('');
     const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
     const [center, setCenter] = useState({ lat: 1.361534, lng: 103.815990 });
     // const [searchParams, setSearchParams] = useSearchParams();
+
+    const mapContainer = useRef(null);
+    const map = useRef(null);
+    const [lng, setLng] = useState(103.815990);
+    const [lat, setLat] = useState(1.361534);
+    const [zoom, setZoom] = useState(9);
 
     const distance = useRef<string>('');
     const duration = useRef(0);
@@ -40,44 +47,44 @@ export default function Maps() {
 
     const restrictions:google.maps.places.ComponentRestrictions | undefined = {country:'sg'}; // I can't afford a worldwide search for the api :(
 
-    const calculateRoute = async () => {
-        if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '') {
-            return;
-        }
-        if (directionService.current === undefined) {
-            directionService.current = new google.maps.DirectionsService();
-        }
-        console.log(map?.getBounds());
+    // const calculateRoute = async () => {
+    //     if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '') {
+    //         return;
+    //     }
+    //     if (directionService.current === undefined) {
+    //         directionService.current = new google.maps.DirectionsService();
+    //     }
+    //     console.log(map?.getBounds());
 
-        const results = await directionService.current.route({
-            origin: startRef.current.value,
-            destination: endRef.current.value,
-            travelMode: google.maps.TravelMode.TRANSIT,
+    //     const results = await directionService.current.route({
+    //         origin: startRef.current.value,
+    //         destination: endRef.current.value,
+    //         travelMode: google.maps.TravelMode.TRANSIT,
 
-        }, (response, status) => {
-            if (status === 'OK' && response !== null) {
-                if (routePolyline) {
-                    // if we have an existing routePolyline we unset it
-                    setRoutePolyline(undefined);
-                }
-                setRoutePolyline({
-                    path: response.routes[0].overview_path,
-                    strokeColor: 'purple',
-                    strokeOpacity: 1.0,
-                    strokeWeight: 5,
-                    map: map,
-                });
-                let bounds = new google.maps.LatLngBounds();
-                response.routes[0].overview_path.forEach((latLng) => bounds.extend(latLng));
-                // center = { lat: bounds.getCenter().lat(), lng: bounds.getCenter().lng()};
-                map!.setCenter(bounds.getCenter());
-                map!.fitBounds(bounds, 5);
-            }
-        });
+    //     }, (response, status) => {
+    //         if (status === 'OK' && response !== null) {
+    //             if (routePolyline) {
+    //                 // if we have an existing routePolyline we unset it
+    //                 setRoutePolyline(undefined);
+    //             }
+    //             setRoutePolyline({
+    //                 path: response.routes[0].overview_path,
+    //                 strokeColor: 'purple',
+    //                 strokeOpacity: 1.0,
+    //                 strokeWeight: 5,
+    //                 map: map,
+    //             });
+    //             let bounds = new google.maps.LatLngBounds();
+    //             response.routes[0].overview_path.forEach((latLng) => bounds.extend(latLng));
+    //             // center = { lat: bounds.getCenter().lat(), lng: bounds.getCenter().lng()};
+    //             map!.setCenter(bounds.getCenter());
+    //             map!.fitBounds(bounds, 5);
+    //         }
+    //     });
 
-        distance.current = results.routes[0].legs[0].distance!.text;
-        // setDuration(results.routes[0].legs[0].duration!.text);
-    }
+    //     distance.current = results.routes[0].legs[0].distance!.text;
+    //     // setDuration(results.routes[0].legs[0].duration!.text);
+    // }
 
     const getNameFromCoordinates = (latLng: google.maps.LatLng | null) : Promise<string> => {
         return geocoder.geocode({ location: latLng }).then((response) => {
@@ -110,29 +117,22 @@ export default function Maps() {
 
     // geocoder needs to be init after map is loaded
     const geocoder = new google.maps.Geocoder();
-//polylineOptions={routePolyline}
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
         <div className="w-full h-full z-0">
-            <GoogleMap
-                center={center}
-                zoom={12}
-                mapContainerStyle={{ width: '100%', height: '100%', zIndex: 0}}
-                options={{
-                clickableIcons: false,
-                zoomControl: true,
-                streetViewControl: false,
-                mapTypeControl: false,
-                fullscreenControl: false
+            <Map
+                initialViewState={{
+                    longitude: -122.4,
+                    latitude: 37.8,
+                    zoom: 14
                 }}
-                onLoad={m => setMap(m)}
-                onClick={e => dropMarker(e)}
+                style={{display: "flex absolute"}}
+                mapboxAccessToken={apiKey}
+                mapStyle="mapbox://styles/mapbox/dark-v10"
+                attributionControl={true}
             >
-                {/* {(directionsResponse &&
-                    <DirectionsRenderer directions={directionsResponse} options={{polylineOptions: routePolyline }} onDirectionsChanged={()=>console.log(re)} ref={re}/>
-                )} */}
-                <Polyline options={routePolyline}/>
-            </GoogleMap>
+                <AttributionControl compact={true} position={"top-left"} style={{display: "absolute"}}/>
+            </Map>
         </div>
         <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
             <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
@@ -151,9 +151,9 @@ export default function Maps() {
                         </Switch>
                         
                     </label>
-                    <Autocomplete restrictions={restrictions}>
+                    
                         <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
-                    </Autocomplete>
+                    
                 </div>
                 <div className="">
                     <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
@@ -169,16 +169,14 @@ export default function Maps() {
                             </svg>
                         </Switch>
                     </label>
-                    <Autocomplete restrictions={restrictions}>
                         <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="End Point" type="text" placeholder="Enter end point" ref={endRef}/>
-                    </Autocomplete>
                 </div>
             </div>
             <div className="flex items-center justify-between sm:flex-row">
                 <span className="sm:ml-5">
                     {"distance: " + `${distance.current !== '' ? distance.current : ''}`}
                 </span>
-                <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" type="button" onClick={calculateRoute}>
+                <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" type="button">
                     Calculate
                 </button>
             </div>
