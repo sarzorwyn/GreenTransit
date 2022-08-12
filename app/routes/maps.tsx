@@ -1,11 +1,8 @@
 import { Switch } from "@headlessui/react";
-import { Autocomplete, DirectionsRenderer, DirectionsService, GoogleMap, Marker, Polyline, useJsApiLoader, useLoadScript } from "@react-google-maps/api";
 import Map, {AttributionControl} from 'react-map-gl';
 import { ActionFunction, LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
-import 'mapbox-gl/dist/mapbox-gl.css';
-import { string } from "zod";
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
@@ -23,12 +20,12 @@ export const libraries:Libraries = ['places']
  */
 export default function Maps() {
     const apiKey = useLoaderData();
-    const { isLoaded } = useLoadScript({
-        googleMapsApiKey: apiKey,
-        libraries: libraries,
-    });
+    // const { isLoaded } = useLoadScript({
+    //     googleMapsApiKey: apiKey,
+    //     libraries: libraries,
+    // });
     const [mapSelector, setMapSelector] = useState<string>('');
-    const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
+    // const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
     const [center, setCenter] = useState({ lat: 1.361534, lng: 103.815990 });
     // const [searchParams, setSearchParams] = useSearchParams();
 
@@ -36,16 +33,20 @@ export default function Maps() {
     const map = useRef(null);
     const [lng, setLng] = useState(103.815990);
     const [lat, setLat] = useState(1.361534);
+    const lowerLat = 1.2;
+    const upperLat = 1.48;
+    const lowerLng = 103.59;
+    const upperLng = 104.05;
     const [zoom, setZoom] = useState(9);
 
     const distance = useRef<string>('');
     const duration = useRef(0);
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
-    const startMarker = useRef<Marker>();
-    const directionService = useRef<google.maps.DirectionsService>();
+    // const startMarker = useRef<Marker>();
+    // const directionService = useRef<google.maps.DirectionsService>();
 
-    const restrictions:google.maps.places.ComponentRestrictions | undefined = {country:'sg'}; // I can't afford a worldwide search for the api :(
+    // const restrictions:google.maps.places.ComponentRestrictions | undefined = {country:'sg'}; // I can't afford a worldwide search for the api :(
 
     // const calculateRoute = async () => {
     //     if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '') {
@@ -86,24 +87,24 @@ export default function Maps() {
     //     // setDuration(results.routes[0].legs[0].duration!.text);
     // }
 
-    const getNameFromCoordinates = (latLng: google.maps.LatLng | null) : Promise<string> => {
-        return geocoder.geocode({ location: latLng }).then((response) => {
-            if (response.results[0]) {
-                return response.results[0].formatted_address;
-            } else {
-                return String(latLng);
-            } 
-        }).catch(() => String(latLng));
-    }
+    // const getNameFromCoordinates = (latLng: google.maps.LatLng | null) : Promise<string> => {
+    //     return geocoder.geocode({ location: latLng }).then((response) => {
+    //         if (response.results[0]) {
+    //             return response.results[0].formatted_address;
+    //         } else {
+    //             return String(latLng);
+    //         } 
+    //     }).catch(() => String(latLng));
+    // }
     
-    const dropMarker = async (e: google.maps.MapMouseEvent) => {
-        if (startRef.current !== null && mapSelector === 'startLocation') {
-            startRef.current.value = await getNameFromCoordinates(e.latLng);
-        } else if (endRef.current !== null && mapSelector === 'endLocation') {
-            endRef.current.value = await getNameFromCoordinates(e.latLng);
-        } 
-        setMapSelector('');
-    }
+    // const dropMarker = async (e: google.maps.MapMouseEvent) => {
+    //     if (startRef.current !== null && mapSelector === 'startLocation') {
+    //         startRef.current.value = await getNameFromCoordinates(e.latLng);
+    //     } else if (endRef.current !== null && mapSelector === 'endLocation') {
+    //         endRef.current.value = await getNameFromCoordinates(e.latLng);
+    //     } 
+    //     setMapSelector('');
+    // }
 
     useEffect(() => {
         if (startRef.current !== null) {
@@ -111,25 +112,38 @@ export default function Maps() {
         }
     }, [startRef])
 
-    if (!isLoaded ) {
-        return <div/>;
-    }
+    // if (!isLoaded ) {
+    //     return <div/>;
+    // }
 
-    // geocoder needs to be init after map is loaded
-    const geocoder = new google.maps.Geocoder();
+    // const geocoder = new google.maps.Geocoder();
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
         <div className="w-full h-full z-0">
+            <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css' rel='stylesheet' />
+
             <Map
                 initialViewState={{
-                    longitude: -122.4,
-                    latitude: 37.8,
+                    bounds: [lowerLng, lowerLat, upperLng, upperLat],
                     zoom: 14
                 }}
-                style={{display: "flex absolute"}}
                 mapboxAccessToken={apiKey}
+                renderWorldCopies={false}
+                boxZoom={false}
+                minZoom={8}
+                logoPosition={'bottom-left'}
+                attributionControl={false}
+                pitchWithRotate={false}
+                dragRotate={true}
+                touchPitch={false}
+                // fitBoundsOptions={
+                //   padding: BREAKPOINT()
+                //     ? 120
+                //     : { top: 40, bottom: window.innerHeight / 2, left: 40, right: 40 },
+                // }
+
+                style={{display: "flex absolute"}}
                 mapStyle="mapbox://styles/mapbox/dark-v10"
-                attributionControl={true}
             >
                 <AttributionControl compact={true} position={"top-left"} style={{display: "absolute"}}/>
             </Map>
