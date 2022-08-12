@@ -1,8 +1,11 @@
 import { Switch } from "@headlessui/react";
 import Map, {AttributionControl} from 'react-map-gl';
-import { ActionFunction, LoaderArgs } from "@remix-run/node";
+import { LoaderArgs, Response } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
+import { fromGeoJSON } from "@mapbox/polyline"
+import GeocoderControl from "~/components/geocoder-control";
+import mapboxgl from "mapbox-gl";
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
@@ -20,17 +23,11 @@ export const libraries:Libraries = ['places']
  */
 export default function Maps() {
     const apiKey = useLoaderData();
-    // const { isLoaded } = useLoadScript({
-    //     googleMapsApiKey: apiKey,
-    //     libraries: libraries,
-    // });
+
     const [mapSelector, setMapSelector] = useState<string>('');
     // const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
     const [center, setCenter] = useState({ lat: 1.361534, lng: 103.815990 });
-    // const [searchParams, setSearchParams] = useSearchParams();
 
-    const mapContainer = useRef(null);
-    const map = useRef(null);
     const [lng, setLng] = useState(103.815990);
     const [lat, setLat] = useState(1.361534);
     const lowerLat = 1.2;
@@ -43,6 +40,11 @@ export default function Maps() {
     const duration = useRef(0);
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
+    
+    const MapboxGeocoder = require('@mapbox/mapbox-sdk/services/geocoding')
+    const geocodingClient = new MapboxGeocoder({
+        accessToken: apiKey
+    })
     // const startMarker = useRef<Marker>();
     // const directionService = useRef<google.maps.DirectionsService>();
 
@@ -87,36 +89,33 @@ export default function Maps() {
     //     // setDuration(results.routes[0].legs[0].duration!.text);
     // }
 
-    // const getNameFromCoordinates = (latLng: google.maps.LatLng | null) : Promise<string> => {
-    //     return geocoder.geocode({ location: latLng }).then((response) => {
-    //         if (response.results[0]) {
-    //             return response.results[0].formatted_address;
-    //         } else {
-    //             return String(latLng);
-    //         } 
-    //     }).catch(() => String(latLng));
-    // }
+    const getNameFromCoordinates = (latLng: mapboxgl.LngLat | null) : Promise<string> => {
+        return geocodingClient.reverseGeocode({
+            query: [latLng?.lng, latLng?.lat]
+          })
+            .send()
+            .then((response) => {
+                // GeoJSON document with geocoding matches
+                console.log(response);
+                if (response.body.features[0]) {
+                    return response.body.features[0].place_name;
+                }
+            }).catch(() => String(latLng));
+    }
     
-    // const dropMarker = async (e: google.maps.MapMouseEvent) => {
-    //     if (startRef.current !== null && mapSelector === 'startLocation') {
-    //         startRef.current.value = await getNameFromCoordinates(e.latLng);
-    //     } else if (endRef.current !== null && mapSelector === 'endLocation') {
-    //         endRef.current.value = await getNameFromCoordinates(e.latLng);
-    //     } 
-    //     setMapSelector('');
-    // }
-
-    useEffect(() => {
-        if (startRef.current !== null) {
-
-        }
-    }, [startRef])
+    const dropMarker = async (e: mapboxgl.MapLayerMouseEvent) => {
+        if (startRef.current !== null && mapSelector === 'startLocation') {
+            startRef.current.value = await getNameFromCoordinates(e.lngLat);
+        } else if (endRef.current !== null && mapSelector === 'endLocation') {
+            endRef.current.value = await getNameFromCoordinates(e.lngLat);
+        } 
+        setMapSelector('');
+    }
 
     // if (!isLoaded ) {
     //     return <div/>;
     // }
 
-    // const geocoder = new google.maps.Geocoder();
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
         <div className="w-full h-full z-0">
@@ -136,6 +135,7 @@ export default function Maps() {
                 pitchWithRotate={false}
                 dragRotate={true}
                 touchPitch={false}
+                onClick={dropMarker}
                 // fitBoundsOptions={
                 //   padding: BREAKPOINT()
                 //     ? 120
@@ -145,7 +145,8 @@ export default function Maps() {
                 style={{display: "flex absolute"}}
                 mapStyle="mapbox://styles/mapbox/dark-v10"
             >
-                <AttributionControl compact={true} position={"top-left"} style={{display: "absolute"}}/>
+                <GeocoderControl mapboxAccessToken={apiKey} position="top-left" flyTo={true}/>
+
             </Map>
         </div>
         <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
