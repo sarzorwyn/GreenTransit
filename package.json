@@ -33,6 +33,7 @@
     "@mapbox/mapbox-gl-geocoder": "^5.0.1",
     "@mapbox/mapbox-sdk": "^0.13.4",
     "@mapbox/polyline": "^1.1.1",
+    "@mapbox/search-js-react": "^1.0.0-beta.13",
     "@prisma/client": "^4.0.0",
     "@remix-run/node": "^1.6.7",
     "@remix-run/react": "^1.6.7",

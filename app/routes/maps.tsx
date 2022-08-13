@@ -1,11 +1,11 @@
 import { Switch } from "@headlessui/react";
-import Map, {AttributionControl} from 'react-map-gl';
+import Map, { MapRef, Marker } from 'react-map-gl';
 import { LoaderArgs, Response } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
-import { useEffect, useRef, useState } from "react";
-import { fromGeoJSON } from "@mapbox/polyline"
+import { MutableRefObject, useEffect, useRef, useState } from "react";
 import GeocoderControl from "~/components/geocoder-control";
 import mapboxgl from "mapbox-gl";
+import { map } from "remix-domains";
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
@@ -26,7 +26,6 @@ export default function Maps() {
 
     const [mapSelector, setMapSelector] = useState<string>('');
     // const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
-    const [center, setCenter] = useState({ lat: 1.361534, lng: 103.815990 });
 
     const [lng, setLng] = useState(103.815990);
     const [lat, setLat] = useState(1.361534);
@@ -36,16 +35,20 @@ export default function Maps() {
     const upperLng = 104.05;
     const [zoom, setZoom] = useState(9);
 
+    const mapboxMap = useRef<MapRef>(null);
     const distance = useRef<string>('');
     const duration = useRef(0);
+
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
+
+    const startMarker = useRef<mapboxgl.Marker>();
+    const endMarker = useRef<mapboxgl.Marker>();
     
-    const MapboxGeocoder = require('@mapbox/mapbox-sdk/services/geocoding')
-    const geocodingClient = new MapboxGeocoder({
+    const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
+    const geocodingClient = new MapboxGeocoderSDK({
         accessToken: apiKey
     })
-    // const startMarker = useRef<Marker>();
     // const directionService = useRef<google.maps.DirectionsService>();
 
     // const restrictions:google.maps.places.ComponentRestrictions | undefined = {country:'sg'}; // I can't afford a worldwide search for the api :(
@@ -89,6 +92,18 @@ export default function Maps() {
     //     // setDuration(results.routes[0].legs[0].duration!.text);
     // }
 
+    const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
+        if (marker.current === undefined) {
+            marker.current = new mapboxgl.Marker();
+        }
+
+        if (latLng !== null) {
+            marker.current.setLngLat(latLng);
+            marker.current.addTo(mapboxMap.current?.getMap()!);
+        }
+        console.log(marker.current)
+    }
+
     const getNameFromCoordinates = (latLng: mapboxgl.LngLat | null) : Promise<string> => {
         return geocodingClient.reverseGeocode({
             query: [latLng?.lng, latLng?.lat]
@@ -96,25 +111,24 @@ export default function Maps() {
             .send()
             .then((response) => {
                 // GeoJSON document with geocoding matches
-                console.log(response);
                 if (response.body.features[0]) {
                     return response.body.features[0].place_name;
+                } else {
+                    return latLng?.lng + ', ' + latLng?.lat;
                 }
-            }).catch(() => String(latLng));
+            });
     }
     
-    const dropMarker = async (e: mapboxgl.MapLayerMouseEvent) => {
+    const mapClick = async (e: mapboxgl.MapLayerMouseEvent) => {
         if (startRef.current !== null && mapSelector === 'startLocation') {
             startRef.current.value = await getNameFromCoordinates(e.lngLat);
+            placeMarker(e.lngLat, startMarker);
         } else if (endRef.current !== null && mapSelector === 'endLocation') {
             endRef.current.value = await getNameFromCoordinates(e.lngLat);
+            placeMarker(e.lngLat, endMarker);
         } 
         setMapSelector('');
     }
-
-    // if (!isLoaded ) {
-    //     return <div/>;
-    // }
 
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
@@ -135,7 +149,8 @@ export default function Maps() {
                 pitchWithRotate={false}
                 dragRotate={true}
                 touchPitch={false}
-                onClick={dropMarker}
+                onClick={mapClick}
+                ref={mapboxMap}
                 // fitBoundsOptions={
                 //   padding: BREAKPOINT()
                 //     ? 120
@@ -145,8 +160,6 @@ export default function Maps() {
                 style={{display: "flex absolute"}}
                 mapStyle="mapbox://styles/mapbox/dark-v10"
             >
-                <GeocoderControl mapboxAccessToken={apiKey} position="top-left" flyTo={true}/>
-
             </Map>
         </div>
         <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
@@ -166,9 +179,7 @@ export default function Maps() {
                         </Switch>
                         
                     </label>
-                    
-                        <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
-                    
+                        <input autoComplete="street-address" className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
                 </div>
                 <div className="">
                     <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
