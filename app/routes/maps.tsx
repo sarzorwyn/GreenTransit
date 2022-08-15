@@ -1,10 +1,11 @@
 import { Switch } from "@headlessui/react";
-import Map, { MapRef, Marker } from 'react-map-gl';
-import { LoaderArgs, Response } from "@remix-run/node";
+import Map, { MapRef } from 'react-map-gl';
+import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { MutableRefObject, useEffect, useRef, useState } from "react";
 import GeocoderControl from "~/components/geocoder-control";
 import mapboxgl from "mapbox-gl";
+
 import { map } from "remix-domains";
 
 export async function loader({ request }: LoaderArgs) {
@@ -24,16 +25,28 @@ export const libraries:Libraries = ['places']
 export default function Maps() {
     const apiKey = useLoaderData();
 
+    const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
+    const MapboxDirectionsModule = require('@mapbox/mapbox-sdk/services/directions');
+    const directionService = new MapboxDirectionsModule({
+        accessToken: apiKey,
+        unit: 'metric',
+        profile: 'mapbox/driving',
+        alternatives: false,
+        geometries: 'geojson',
+        controls: { instructions: false },
+        flyTo: false
+    })
+    const geocodingClient = new MapboxGeocoderSDK({
+        accessToken: apiKey
+    })
+
     const [mapSelector, setMapSelector] = useState<string>('');
     // const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
 
-    const [lng, setLng] = useState(103.815990);
-    const [lat, setLat] = useState(1.361534);
     const lowerLat = 1.2;
     const upperLat = 1.48;
     const lowerLng = 103.59;
     const upperLng = 104.05;
-    const [zoom, setZoom] = useState(9);
 
     const mapboxMap = useRef<MapRef>(null);
     const distance = useRef<string>('');
@@ -42,55 +55,63 @@ export default function Maps() {
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
 
+    const startLngLat = useRef<mapboxgl.LngLat>();
+    const endLngLat = useRef<mapboxgl.LngLat>();
+
     const startMarker = useRef<mapboxgl.Marker>();
     const endMarker = useRef<mapboxgl.Marker>();
-    
-    const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
-    const geocodingClient = new MapboxGeocoderSDK({
-        accessToken: apiKey
-    })
-    // const directionService = useRef<google.maps.DirectionsService>();
 
-    // const restrictions:google.maps.places.ComponentRestrictions | undefined = {country:'sg'}; // I can't afford a worldwide search for the api :(
+    const calculateRoute = async () => {
+        if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '') {
+            return;
+        }
 
-    // const calculateRoute = async () => {
-    //     if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '') {
-    //         return;
-    //     }
-    //     if (directionService.current === undefined) {
-    //         directionService.current = new google.maps.DirectionsService();
-    //     }
-    //     console.log(map?.getBounds());
+        const results = await directionService.getDirections({
+            profile: 'driving-traffic',
+            waypoints: [
+              {
+                coordinates: [startLngLat.current?.lng, startLngLat.current?.lat],
+              },
+              {
+                coordinates: [endLngLat.current?.lng, endLngLat.current?.lat],
+              }
+            ]
+          })
+            .send()
+            .then(response => {
+              const directions = response.body;
+              console.log(directions);
+            });
 
-    //     const results = await directionService.current.route({
-    //         origin: startRef.current.value,
-    //         destination: endRef.current.value,
-    //         travelMode: google.maps.TravelMode.TRANSIT,
+        // .get({
+        //     origin: startRef.current.value,
+        //     destination: endRef.current.value,
+        //     travelMode: google.maps.TravelMode.TRANSIT,
 
-    //     }, (response, status) => {
-    //         if (status === 'OK' && response !== null) {
-    //             if (routePolyline) {
-    //                 // if we have an existing routePolyline we unset it
-    //                 setRoutePolyline(undefined);
-    //             }
-    //             setRoutePolyline({
-    //                 path: response.routes[0].overview_path,
-    //                 strokeColor: 'purple',
-    //                 strokeOpacity: 1.0,
-    //                 strokeWeight: 5,
-    //                 map: map,
-    //             });
-    //             let bounds = new google.maps.LatLngBounds();
-    //             response.routes[0].overview_path.forEach((latLng) => bounds.extend(latLng));
-    //             // center = { lat: bounds.getCenter().lat(), lng: bounds.getCenter().lng()};
-    //             map!.setCenter(bounds.getCenter());
-    //             map!.fitBounds(bounds, 5);
-    //         }
-    //     });
+        // }, (response, status) => {
+        //     if (status === 'OK' && response !== null) {
+        //         if (routePolyline) {
+        //             // if we have an existing routePolyline we unset it
+        //             setRoutePolyline(undefined);
+        //         }
+        //         setRoutePolyline({
+        //             path: response.routes[0].overview_path,
+        //             strokeColor: 'purple',
+        //             strokeOpacity: 1.0,
+        //             strokeWeight: 5,
+        //             map: map,
+        //         });
+        //         let bounds = new google.maps.LatLngBounds();
+        //         response.routes[0].overview_path.forEach((latLng) => bounds.extend(latLng));
+        //         // center = { lat: bounds.getCenter().lat(), lng: bounds.getCenter().lng()};
+        //         map!.setCenter(bounds.getCenter());
+        //         map!.fitBounds(bounds, 5);
+        //     }
+        // });
 
-    //     distance.current = results.routes[0].legs[0].distance!.text;
-    //     // setDuration(results.routes[0].legs[0].duration!.text);
-    // }
+        // distance.current = results.routes[0].legs[0].distance!.text;
+        // setDuration(results.routes[0].legs[0].duration!.text);
+    }
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
         if (marker.current === undefined) {
@@ -104,7 +125,7 @@ export default function Maps() {
         console.log(marker.current)
     }
 
-    const getNameFromCoordinates = (latLng: mapboxgl.LngLat | null) : Promise<string> => {
+    const getFeatureFromCoordinates = (latLng: mapboxgl.LngLat | null) : Promise<MapboxGeocoder.Result> => {
         return geocodingClient.reverseGeocode({
             query: [latLng?.lng, latLng?.lat]
           })
@@ -112,19 +133,30 @@ export default function Maps() {
             .then((response) => {
                 // GeoJSON document with geocoding matches
                 if (response.body.features[0]) {
-                    return response.body.features[0].place_name;
+                    return response.body.features[0];
                 } else {
-                    return latLng?.lng + ', ' + latLng?.lat;
+                    return null;
                 }
             });
     }
+
+    const getPlaceName = (feature: MapboxGeocoder.Result, latLng: mapboxgl.LngLat) => {
+        if (feature != undefined) {
+            return feature.place_name;
+        }
+        return String(latLng?.lng + ', ' + latLng?.lat);
+    }
     
     const mapClick = async (e: mapboxgl.MapLayerMouseEvent) => {
-        if (startRef.current !== null && mapSelector === 'startLocation') {
-            startRef.current.value = await getNameFromCoordinates(e.lngLat);
+        if (startRef.current !== null && mapSelector === 'startLocation') {      
+            const feature = await getFeatureFromCoordinates(e.lngLat);
+            startRef.current.value = getPlaceName(feature, e.lngLat);
+            startLngLat.current = e.lngLat;
             placeMarker(e.lngLat, startMarker);
         } else if (endRef.current !== null && mapSelector === 'endLocation') {
-            endRef.current.value = await getNameFromCoordinates(e.lngLat);
+            const feature = await getFeatureFromCoordinates(e.lngLat);
+            endRef.current.value = getPlaceName(feature, e.lngLat);
+            endLngLat.current = e.lngLat;
             placeMarker(e.lngLat, endMarker);
         } 
         setMapSelector('');
@@ -202,7 +234,7 @@ export default function Maps() {
                 <span className="sm:ml-5">
                     {"distance: " + `${distance.current !== '' ? distance.current : ''}`}
                 </span>
-                <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" type="button">
+                <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" type="button" onClick={calculateRoute}>
                     Calculate
                 </button>
             </div>

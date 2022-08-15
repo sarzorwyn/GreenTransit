@@ -30,6 +30,7 @@
   ],
   "dependencies": {
     "@headlessui/react": "^1.6.6",
+    "@mapbox/mapbox-gl-directions": "^4.1.0",
     "@mapbox/mapbox-gl-geocoder": "^5.0.1",
     "@mapbox/mapbox-sdk": "^0.13.4",
     "@mapbox/polyline": "^1.1.1",
@@ -48,7 +49,8 @@
     "react-map-gl": "^7.0.18",
     "remix-domains": "^0.3.2",
     "remix-forms": "^0.17.4-test.0",
-    "tiny-invariant": "^1.2.0"
+    "tiny-invariant": "^1.2.0",
+    "zod": "^3.18.0"
   },
   "devDependencies": {
     "@faker-js/faker": "^7.3.0",
