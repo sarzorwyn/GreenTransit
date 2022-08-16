@@ -60,9 +60,9 @@ export default function Maps() {
     const startMarker = useRef<mapboxgl.Marker>();
     const endMarker = useRef<mapboxgl.Marker>();
 
-    const [routes, setRoutes] = useState<GeoJSON.FeatureCollection>({
-      type: 'FeatureCollection',
-      features: [],
+    const [displayRoute, setDisplayRoute] = useState<GeoJSON.LineString>({
+      type: 'LineString',
+      coordinates: [],
     });
 
     const routesLayer: mapboxgl.LineLayer = {
@@ -130,15 +130,16 @@ export default function Maps() {
                 
                 console.log(geoJsonFormat);
 
-                setRoutes({
-                  type: 'FeatureCollection',
-                  features: [geoJsonFormat]
-                  // features: geoJsonFormat.map((geometry) => ({
-                  //   type: 'Feature',
-                  //   properties: {},
-                  //   geometry,
-                  // })),
-                });
+                setDisplayRoute(geoJsonFormat);
+                // setRoutes({
+                //   type: 'FeatureCollection',
+                //   features: [geoJsonFormat]
+                //   // features: geoJsonFormat.map((geometry) => ({
+                //   //   type: 'Feature',
+                //   //   properties: {},
+                //   //   geometry,
+                //   // })),
+                // });
 
                 
                 console.log(mapboxMap.current?.getMap().getSource('routes'));
@@ -335,7 +336,7 @@ export default function Maps() {
                 style={{display: "flex absolute"}}
                 mapStyle="mapbox://styles/mapbox/dark-v10"
             >
-                <Source id="routes" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={routes}>
+                <Source id="routes" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={displayRoute}>
                     <Layer {...routesLayer} />
                 </Source>
             </Map>
