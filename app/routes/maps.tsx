@@ -38,9 +38,7 @@ export default function Maps() {
         accessToken: apiKey
     })
 
-    const [mapSelector, setMapSelector] = useState<string>('');
-    // const [carDirections, setCarDirections] = useState<Route>();
-    // const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
+    const [markerSelector, setMarkerSelector] = useState<string>('');
 
     const lowerLat = 1.2;
     const upperLat = 1.48;
@@ -53,6 +51,7 @@ export default function Maps() {
     const startMarker = useRef<mapboxgl.Marker>();
     const endMarker = useRef<mapboxgl.Marker>();
 
+    // Set up map and marker after map is fully loaded
     useEffect(() => {
         if (mapboxMapRef != undefined && mapboxMapRef.current != null) {
             setMapboxMap(mapboxMapRef.current.getMap())
@@ -60,10 +59,10 @@ export default function Maps() {
             startMarker.current = new mapboxgl.Marker({color: "#20ba44"})
             endMarker.current = new mapboxgl.Marker({color: "#972FFE"})
         }
-    }, [mapboxMapRef.current])
+    }, [mapboxMapRef.current?.loaded])
 
-    const distance = useRef<string>('');
-    const duration = useRef(0);
+    const [displayDistance, setDisplayDistance] = useState<string>('');
+    const [displayDuration, setDisplayDuration] = useState<string>('');
 
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
@@ -124,6 +123,14 @@ export default function Maps() {
         },
       }
 
+    const parseDistance = (distance: number) : string => {
+        if (distance < 1000) {
+            return distance.toFixed(0) + ' m';
+        } else {
+            return (distance / 1000).toFixed(1) + ' km'
+        }
+    }
+
     const calculateRoute = async () => {
         if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
             return;
@@ -142,9 +149,8 @@ export default function Maps() {
           })
             .send()
             .then(response => {
-                const directions = response.body;
-                const geoJsonFormat = toGeoJSON(directions.routes[0].geometry);
-                
+                const geoJsonFormat = toGeoJSON(response.body.routes[0].geometry);
+                console.log(response.body);
                 console.log(geoJsonFormat);
 
                 setDisplayRoute({    
@@ -152,8 +158,8 @@ export default function Maps() {
                 geometry: geoJsonFormat,
                 properties: null});
 
-                console.log(mapboxMap?.getSource('routes'));
-                console.log(mapboxMap?.getLayer('routes'));
+                console.log(response.body.routes[0].distance)
+                setDisplayDistance(parseDistance(response.body.routes[0].distance));
                 // mapboxMap?.getMap().getSource('routes').setData({
                 //     type: 'FeatureCollection',
                 //     features: geoJsonFormat.map((geometry) => ({
@@ -164,20 +170,14 @@ export default function Maps() {
                 //   });
             });
 
-        // distance.current = results.routes[0].legs[0].distance!.text;
         // setDuration(results.routes[0].legs[0].duration!.text);
     }
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
-        if (marker.current === undefined) {
-            marker.current = new mapboxgl.Marker();
-        }
-
-        if (latLng !== null) {
+        if (marker.current !== undefined && latLng !== null) {
             marker.current.setLngLat(latLng);
             marker.current.addTo(mapboxMap!);
         }
-        console.log(marker.current)
     }
 
     const getFeatureFromCoordinates = (latLng: mapboxgl.LngLat | null) : Promise<MapboxGeocoder.Result> => {
@@ -203,20 +203,20 @@ export default function Maps() {
     }
     
     const mapClick = async (e: mapboxgl.MapLayerMouseEvent) => {
-        if (startRef.current !== null && mapSelector === 'startLocation') {      
+        if (startRef.current !== null && markerSelector === 'startLocation') {      
             const feature = await getFeatureFromCoordinates(e.lngLat);
             startRef.current.value = getPlaceName(feature, e.lngLat);
             setStartLngLat(e.lngLat);
             placeMarker(e.lngLat, startMarker);
 
             // startMarker?.setLngLat(e.lngLat);
-        } else if (endRef.current !== null && mapSelector === 'endLocation') {
+        } else if (endRef.current !== null && markerSelector === 'endLocation') {
             const feature = await getFeatureFromCoordinates(e.lngLat);
             endRef.current.value = getPlaceName(feature, e.lngLat);
             setEndLngLat(e.lngLat);
             placeMarker(e.lngLat, endMarker);
         } 
-        setMapSelector('');
+        setMarkerSelector('');
     }
 
     return (
@@ -260,11 +260,11 @@ export default function Maps() {
                     <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
                         Origin
                         <Switch
-                            checked={mapSelector === 'startLocation'}
-                            onChange={() => mapSelector === 'startLocation' ? setMapSelector('') : setMapSelector('startLocation')} // toggle
+                            checked={markerSelector === 'startLocation'}
+                            onChange={() => markerSelector === 'startLocation' ? setMarkerSelector('') : setMarkerSelector('startLocation')} // toggle
                             className='ml-auto mr-2'
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`${mapSelector === 'startLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector === 'startLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
@@ -277,11 +277,11 @@ export default function Maps() {
                     <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
                         Destination
                         <Switch
-                            checked={mapSelector === 'endLocation'}
-                            onChange={() => mapSelector === 'endLocation' ? setMapSelector('') : setMapSelector('endLocation')} // toggle 
+                            checked={markerSelector === 'endLocation'}
+                            onChange={() => markerSelector === 'endLocation' ? setMarkerSelector('') : setMarkerSelector('endLocation')} // toggle 
                             className='ml-auto mr-2'
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`${mapSelector == 'endLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector == 'endLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
@@ -292,7 +292,7 @@ export default function Maps() {
             </div>
             <div className="flex items-center justify-between sm:flex-row">
                 <span className="sm:ml-5">
-                    {"distance: " + `${distance.current !== '' ? distance.current : ''}`}
+                    {"distance: " + `${displayDistance !== '' ? displayDistance : ''}`}
                 </span>
                 <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" type="button" onClick={calculateRoute}>
                     Calculate
