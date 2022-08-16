@@ -96,10 +96,8 @@ export default function Maps() {
             ['line-progress'],
             0,
             '#20ba44',
-            0.5,
-            '#972FFE',
             1,
-            '#f01b48',
+            '#972FFE',
           ],
           'line-opacity': [
             'case',
@@ -136,19 +134,24 @@ export default function Maps() {
             return;
         }
 
-        const results = await directionService.getDirections({
-            profile: 'driving-traffic',
-            waypoints: [
-              {
-                coordinates: [startLngLat.lng, startLngLat.lat],
-              },
-              {
-                coordinates: [endLngLat.lng, endLngLat.lat],
-              }
-            ]
-          })
+        // Public transport is not included here as mapbox does not support it natively
+        // TODO: add another api that calculates public transit time/ distance and display those data without directions due to TOS restrictions
+        const travelTypes = ['driving-traffic', 'walking', 'cycling'];
+
+        const results = travelTypes.map((travelType) => 
+            directionService.getDirections({
+                profile: travelType,
+                waypoints: [
+                {
+                    coordinates: [startLngLat.lng, startLngLat.lat],
+                },
+                {
+                    coordinates: [endLngLat.lng, endLngLat.lat],
+                }
+                ]
+            })
             .send()
-            .then(response => {
+            .then((response: any) => {
                 const geoJsonFormat = toGeoJSON(response.body.routes[0].geometry);
                 console.log(response.body);
                 console.log(geoJsonFormat);
@@ -158,18 +161,19 @@ export default function Maps() {
                 geometry: geoJsonFormat,
                 properties: null});
 
-                console.log(response.body.routes[0].distance)
                 setDisplayDistance(parseDistance(response.body.routes[0].distance));
-                // mapboxMap?.getMap().getSource('routes').setData({
-                //     type: 'FeatureCollection',
-                //     features: geoJsonFormat.map((geometry) => ({
-                //       type: 'Feature',
-                //       properties: {},
-                //       geometry,
-                //     })),
-                //   });
-            });
+            })
+        );
 
+        
+        // mapboxMap?.getMap().getSource('routes').setData({
+        //     type: 'FeatureCollection',
+        //     features: geoJsonFormat.map((geometry) => ({
+        //       type: 'Feature',
+        //       properties: {},
+        //       geometry,
+        //     })),
+        //   });
         // setDuration(results.routes[0].legs[0].duration!.text);
     }
 
@@ -185,7 +189,7 @@ export default function Maps() {
             query: [latLng?.lng, latLng?.lat]
           })
             .send()
-            .then((response) => {
+            .then((response: any) => {
                 // GeoJSON document with geocoding matches
                 if (response.body.features[0]) {
                     return response.body.features[0];
