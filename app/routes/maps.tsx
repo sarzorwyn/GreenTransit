@@ -1,12 +1,10 @@
 import { Switch } from "@headlessui/react";
-import Map, { MapRef } from 'react-map-gl';
+import Map, { Layer, MapRef, Source } from 'react-map-gl';
 import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
-import { MutableRefObject, useEffect, useRef, useState } from "react";
-import GeocoderControl from "~/components/geocoder-control";
+import { MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { toGeoJSON } from '@mapbox/polyline';
 import mapboxgl from "mapbox-gl";
-
-import { map } from "remix-domains";
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
@@ -34,13 +32,14 @@ export default function Maps() {
         alternatives: false,
         geometries: 'geojson',
         controls: { instructions: false },
-        flyTo: false
+        flyTo: true
     })
     const geocodingClient = new MapboxGeocoderSDK({
         accessToken: apiKey
     })
 
     const [mapSelector, setMapSelector] = useState<string>('');
+    // const [carDirections, setCarDirections] = useState<Route>();
     // const [routePolyline, setRoutePolyline] = useState<google.maps.PolylineOptions>();
 
     const lowerLat = 1.2;
@@ -61,6 +60,53 @@ export default function Maps() {
     const startMarker = useRef<mapboxgl.Marker>();
     const endMarker = useRef<mapboxgl.Marker>();
 
+    const [routes, setRoutes] = useState<GeoJSON.FeatureCollection>({
+      type: 'FeatureCollection',
+      features: [],
+    });
+
+    const routesLayer: mapboxgl.LineLayer = {
+        id: 'routes',
+        type: 'line',
+        source: 'routes-path',
+        layout: {
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': '#f01b48',
+          'line-gradient': [
+            'interpolate',
+            ['linear'],
+            ['line-progress'],
+            0,
+            '#f01b48',
+            0.5,
+            '#972FFE',
+            1,
+            '#f01b48',
+          ],
+          'line-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            1,
+            ['boolean', ['feature-state', 'fadein'], false],
+            0.07,
+            0.5, // default
+          ],
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            12,
+            2,
+            16,
+            5,
+            22,
+            10,
+          ],
+        },
+      }
+
     const calculateRoute = async () => {
         if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '') {
             return;
@@ -79,35 +125,33 @@ export default function Maps() {
           })
             .send()
             .then(response => {
-              const directions = response.body;
-              console.log(directions);
+                const directions = response.body;
+                const geoJsonFormat = toGeoJSON(directions.routes[0].geometry);
+                
+                console.log(geoJsonFormat);
+
+                setRoutes({
+                  type: 'FeatureCollection',
+                  features: [geoJsonFormat]
+                  // features: geoJsonFormat.map((geometry) => ({
+                  //   type: 'Feature',
+                  //   properties: {},
+                  //   geometry,
+                  // })),
+                });
+
+                
+                console.log(mapboxMap.current?.getMap().getSource('routes'));
+                console.log(mapboxMap.current?.getMap().getLayer('routes'));
+                // mapboxMap.current?.getMap().getSource('routes').setData({
+                //     type: 'FeatureCollection',
+                //     features: geoJsonFormat.map((geometry) => ({
+                //       type: 'Feature',
+                //       properties: {},
+                //       geometry,
+                //     })),
+                //   });
             });
-
-        // .get({
-        //     origin: startRef.current.value,
-        //     destination: endRef.current.value,
-        //     travelMode: google.maps.TravelMode.TRANSIT,
-
-        // }, (response, status) => {
-        //     if (status === 'OK' && response !== null) {
-        //         if (routePolyline) {
-        //             // if we have an existing routePolyline we unset it
-        //             setRoutePolyline(undefined);
-        //         }
-        //         setRoutePolyline({
-        //             path: response.routes[0].overview_path,
-        //             strokeColor: 'purple',
-        //             strokeOpacity: 1.0,
-        //             strokeWeight: 5,
-        //             map: map,
-        //         });
-        //         let bounds = new google.maps.LatLngBounds();
-        //         response.routes[0].overview_path.forEach((latLng) => bounds.extend(latLng));
-        //         // center = { lat: bounds.getCenter().lat(), lng: bounds.getCenter().lng()};
-        //         map!.setCenter(bounds.getCenter());
-        //         map!.fitBounds(bounds, 5);
-        //     }
-        // });
 
         // distance.current = results.routes[0].legs[0].distance!.text;
         // setDuration(results.routes[0].legs[0].duration!.text);
@@ -162,6 +206,105 @@ export default function Maps() {
         setMapSelector('');
     }
 
+    useEffect(() => {
+        if (mapboxMap == undefined) {
+            return;
+        }
+
+        // mapboxMap.current?.getMap().addSource('routes-path', {
+        //     type: 'geojson',
+        //     tolerance: 1,
+        //     buffer: 0,
+        //     lineMetrics: true,
+        //     data: {
+        //       type: 'FeatureCollection',
+        //       features: [],
+        //     },
+        //   });
+      
+        // mapboxMap.current?.getMap().addLayer(
+        //     {
+        //       id: 'routes-path',
+        //       type: 'line',
+        //       source: 'routes-path',
+        //       layout: {
+        //         'line-cap': 'round',
+        //       },
+        //       paint: {
+        //         'line-color': '#f01b48',
+        //         'line-gradient': [
+        //           'interpolate',
+        //           ['linear'],
+        //           ['line-progress'],
+        //           0,
+        //           '#f01b48',
+        //           0.5,
+        //           '#972FFE',
+        //           1,
+        //           '#f01b48',
+        //         ],
+        //         'line-opacity': [
+        //           'case',
+        //           ['boolean', ['feature-state', 'hover'], false],
+        //           1,
+        //           ['boolean', ['feature-state', 'fadein'], false],
+        //           0.07,
+        //           0.5, // default
+        //         ],
+        //         'line-width': [
+        //           'interpolate',
+        //           ['linear'],
+        //           ['zoom'],
+        //           12,
+        //           2,
+        //           16,
+        //           5,
+        //           22,
+        //           10,
+        //         ],
+        //       },
+        //     },
+        //     'stops',
+        //   );
+
+        // mapboxMap.current?.getMap().addLayer({
+        //     id: 'route-arrows',
+        //     type: 'symbol',
+        //     source: 'routes',
+        //     minzoom: 12,
+        //     layout: {
+        //     'symbol-placement': 'line',
+        //     'symbol-spacing': 100,
+        //     'text-field': '→',
+        //     'text-size': 16,
+        //     'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+        //     'text-allow-overlap': true,
+        //     'text-ignore-placement': true,
+        //     'text-keep-upright': false,
+        //     'text-anchor': 'bottom',
+        //     'text-padding': 0,
+        //     'text-line-height': 1,
+        //     'text-offset': [
+        //         'interpolate',
+        //         ['linear'],
+        //         ['zoom'],
+        //         12,
+        //         ['literal', [0, 0]],
+        //         22,
+        //         ['literal', [0, -2]],
+        //     ],
+        //     },
+        //     paint: {
+        //     'text-color': '#5301a4',
+        //     'text-opacity': 0.9,
+        //     'text-halo-color': '#fff',
+        //     'text-halo-width': 2,
+        //     },
+        // },
+        // 'stops',
+        // );
+    }, [])
+
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
         <div className="w-full h-full z-0">
@@ -192,6 +335,9 @@ export default function Maps() {
                 style={{display: "flex absolute"}}
                 mapStyle="mapbox://styles/mapbox/dark-v10"
             >
+                <Source id="routes" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={routes}>
+                    <Layer {...routesLayer} />
+                </Source>
             </Map>
         </div>
         <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
