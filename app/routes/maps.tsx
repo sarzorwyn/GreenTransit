@@ -47,22 +47,39 @@ export default function Maps() {
     const lowerLng = 103.59;
     const upperLng = 104.05;
 
-    const mapboxMap = useRef<MapRef>(null);
+    const mapboxMapRef = useRef<MapRef>(null);
+    const [mapboxMap, setMapboxMap] = useState<mapboxgl.Map>();
+
+    const startMarker = useRef<mapboxgl.Marker>();
+    const endMarker = useRef<mapboxgl.Marker>();
+
+    useEffect(() => {
+        if (mapboxMapRef != undefined && mapboxMapRef.current != null) {
+            setMapboxMap(mapboxMapRef.current.getMap())
+
+            startMarker.current = new mapboxgl.Marker({color: "#20ba44"})
+            endMarker.current = new mapboxgl.Marker({color: "#972FFE"})
+        }
+    }, [mapboxMapRef.current])
+
     const distance = useRef<string>('');
     const duration = useRef(0);
 
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
 
-    const startLngLat = useRef<mapboxgl.LngLat>();
-    const endLngLat = useRef<mapboxgl.LngLat>();
+    const [startLngLat, setStartLngLat] = useState<mapboxgl.LngLat>();
+    const [endLngLat, setEndLngLat] = useState<mapboxgl.LngLat>();
 
-    const startMarker = useRef<mapboxgl.Marker>();
-    const endMarker = useRef<mapboxgl.Marker>();
 
-    const [displayRoute, setDisplayRoute] = useState<GeoJSON.LineString>({
-      type: 'LineString',
-      coordinates: [],
+
+    const [displayRoute, setDisplayRoute] = useState<GeoJSON.Feature>({
+        type: "Feature",
+        geometry: {
+            type: 'LineString',
+            coordinates: [],
+        },
+        properties: null
     });
 
     const routesLayer: mapboxgl.LineLayer = {
@@ -79,7 +96,7 @@ export default function Maps() {
             ['linear'],
             ['line-progress'],
             0,
-            '#f01b48',
+            '#20ba44',
             0.5,
             '#972FFE',
             1,
@@ -108,7 +125,7 @@ export default function Maps() {
       }
 
     const calculateRoute = async () => {
-        if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '') {
+        if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
             return;
         }
 
@@ -116,10 +133,10 @@ export default function Maps() {
             profile: 'driving-traffic',
             waypoints: [
               {
-                coordinates: [startLngLat.current?.lng, startLngLat.current?.lat],
+                coordinates: [startLngLat.lng, startLngLat.lat],
               },
               {
-                coordinates: [endLngLat.current?.lng, endLngLat.current?.lat],
+                coordinates: [endLngLat.lng, endLngLat.lat],
               }
             ]
           })
@@ -130,21 +147,14 @@ export default function Maps() {
                 
                 console.log(geoJsonFormat);
 
-                setDisplayRoute(geoJsonFormat);
-                // setRoutes({
-                //   type: 'FeatureCollection',
-                //   features: [geoJsonFormat]
-                //   // features: geoJsonFormat.map((geometry) => ({
-                //   //   type: 'Feature',
-                //   //   properties: {},
-                //   //   geometry,
-                //   // })),
-                // });
+                setDisplayRoute({    
+                    type: "Feature",
+                geometry: geoJsonFormat,
+                properties: null});
 
-                
-                console.log(mapboxMap.current?.getMap().getSource('routes'));
-                console.log(mapboxMap.current?.getMap().getLayer('routes'));
-                // mapboxMap.current?.getMap().getSource('routes').setData({
+                console.log(mapboxMap?.getSource('routes'));
+                console.log(mapboxMap?.getLayer('routes'));
+                // mapboxMap?.getMap().getSource('routes').setData({
                 //     type: 'FeatureCollection',
                 //     features: geoJsonFormat.map((geometry) => ({
                 //       type: 'Feature',
@@ -165,7 +175,7 @@ export default function Maps() {
 
         if (latLng !== null) {
             marker.current.setLngLat(latLng);
-            marker.current.addTo(mapboxMap.current?.getMap()!);
+            marker.current.addTo(mapboxMap!);
         }
         console.log(marker.current)
     }
@@ -196,115 +206,18 @@ export default function Maps() {
         if (startRef.current !== null && mapSelector === 'startLocation') {      
             const feature = await getFeatureFromCoordinates(e.lngLat);
             startRef.current.value = getPlaceName(feature, e.lngLat);
-            startLngLat.current = e.lngLat;
+            setStartLngLat(e.lngLat);
             placeMarker(e.lngLat, startMarker);
+
+            // startMarker?.setLngLat(e.lngLat);
         } else if (endRef.current !== null && mapSelector === 'endLocation') {
             const feature = await getFeatureFromCoordinates(e.lngLat);
             endRef.current.value = getPlaceName(feature, e.lngLat);
-            endLngLat.current = e.lngLat;
+            setEndLngLat(e.lngLat);
             placeMarker(e.lngLat, endMarker);
         } 
         setMapSelector('');
     }
-
-    useEffect(() => {
-        if (mapboxMap == undefined) {
-            return;
-        }
-
-        // mapboxMap.current?.getMap().addSource('routes-path', {
-        //     type: 'geojson',
-        //     tolerance: 1,
-        //     buffer: 0,
-        //     lineMetrics: true,
-        //     data: {
-        //       type: 'FeatureCollection',
-        //       features: [],
-        //     },
-        //   });
-      
-        // mapboxMap.current?.getMap().addLayer(
-        //     {
-        //       id: 'routes-path',
-        //       type: 'line',
-        //       source: 'routes-path',
-        //       layout: {
-        //         'line-cap': 'round',
-        //       },
-        //       paint: {
-        //         'line-color': '#f01b48',
-        //         'line-gradient': [
-        //           'interpolate',
-        //           ['linear'],
-        //           ['line-progress'],
-        //           0,
-        //           '#f01b48',
-        //           0.5,
-        //           '#972FFE',
-        //           1,
-        //           '#f01b48',
-        //         ],
-        //         'line-opacity': [
-        //           'case',
-        //           ['boolean', ['feature-state', 'hover'], false],
-        //           1,
-        //           ['boolean', ['feature-state', 'fadein'], false],
-        //           0.07,
-        //           0.5, // default
-        //         ],
-        //         'line-width': [
-        //           'interpolate',
-        //           ['linear'],
-        //           ['zoom'],
-        //           12,
-        //           2,
-        //           16,
-        //           5,
-        //           22,
-        //           10,
-        //         ],
-        //       },
-        //     },
-        //     'stops',
-        //   );
-
-        // mapboxMap.current?.getMap().addLayer({
-        //     id: 'route-arrows',
-        //     type: 'symbol',
-        //     source: 'routes',
-        //     minzoom: 12,
-        //     layout: {
-        //     'symbol-placement': 'line',
-        //     'symbol-spacing': 100,
-        //     'text-field': '→',
-        //     'text-size': 16,
-        //     'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
-        //     'text-allow-overlap': true,
-        //     'text-ignore-placement': true,
-        //     'text-keep-upright': false,
-        //     'text-anchor': 'bottom',
-        //     'text-padding': 0,
-        //     'text-line-height': 1,
-        //     'text-offset': [
-        //         'interpolate',
-        //         ['linear'],
-        //         ['zoom'],
-        //         12,
-        //         ['literal', [0, 0]],
-        //         22,
-        //         ['literal', [0, -2]],
-        //     ],
-        //     },
-        //     paint: {
-        //     'text-color': '#5301a4',
-        //     'text-opacity': 0.9,
-        //     'text-halo-color': '#fff',
-        //     'text-halo-width': 2,
-        //     },
-        // },
-        // 'stops',
-        // );
-    }, [])
 
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
@@ -326,7 +239,7 @@ export default function Maps() {
                 dragRotate={true}
                 touchPitch={false}
                 onClick={mapClick}
-                ref={mapboxMap}
+                ref={mapboxMapRef}
                 // fitBoundsOptions={
                 //   padding: BREAKPOINT()
                 //     ? 120
