@@ -1,10 +1,14 @@
-import { Switch } from "@headlessui/react";
+import { Switch, Tab, Transition } from "@headlessui/react";
 import Map, { Layer, MapRef, Source } from 'react-map-gl';
 import { LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
-import { MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toGeoJSON } from '@mapbox/polyline';
 import mapboxgl from "mapbox-gl";
+
+function classNames(...classes: string[]) {
+  return classes.filter(Boolean).join(' ')
+}
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
@@ -28,6 +32,8 @@ declare type NameValue = {
  * @returns the map and overlays
  */
 export default function Maps() {
+    let [isShowingTopMenu, setIsShowingTopMenu] = useState(true)
+
     const apiKey = useLoaderData();
 
     const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
@@ -39,10 +45,10 @@ export default function Maps() {
         geometries: 'geojson',
         controls: { instructions: false },
         flyTo: true,
-    })
+    });
     const geocodingClient = new MapboxGeocoderSDK({
         accessToken: apiKey
-    })
+    });
 
     const travelTypes: string[] = ['driving-traffic', 'walking', 'cycling'];
     const lowerLat = 1.2;
@@ -127,7 +133,7 @@ export default function Maps() {
             1,
             ['boolean', ['feature-state', 'fadein'], false],
             0.07,
-            0.5, // default
+            0.9, // default
           ],
           'line-width': [
             'interpolate',
@@ -328,8 +334,83 @@ export default function Maps() {
         } else if (e.features != undefined) {
             console.log(e.features)
         }
-
     }
+
+    let [categories, setCategories] = useState({
+        Fastest: [
+          {
+            id: 1,
+            title: 'Driving',
+            distance: '',
+            duration: '',
+            shareCount: 2,
+          },
+          {
+            id: 2,
+            title: 'Cycling',
+            distance: '',
+            duration: '',
+            shareCount: 2,
+          },
+          {
+            id: 3,
+            title: 'Walking',
+            distance: '',
+            duration: '',
+            shareCount: 2,
+          },
+        ],
+        Popular: [
+          {
+            id: 1,
+            title: 'Is tech making coffee better or worse?',
+            distance: 'Jan 7',
+            duration: 29,
+            shareCount: 16,
+          },
+          {
+            id: 2,
+            title: 'The most innovative things happening in coffee',
+            distance: 'Mar 19',
+            duration: 24,
+            shareCount: 12,
+          },
+        ],
+        Trending: [
+          {
+            id: 1,
+            title: 'Ask Me Anything: 10 answers to your questions about coffee',
+            distance: '2d ago',
+            duration: 9,
+            shareCount: 5,
+          },
+          {
+            id: 2,
+            title: "The worst advice we've ever heard about coffee",
+            distance: '4d ago',
+            duration: 1,
+            shareCount: 2,
+          },
+        ],
+      })
+
+    useEffect(() => {
+        setCategories((prevState) => {
+            const update = {
+                ...prevState,
+            };
+            update.Fastest[0].distance = availableDistances['driving-traffic'];
+            update.Fastest[1].distance = availableDistances['cycling'];
+            update.Fastest[2].distance = availableDistances['walking'];
+
+            update.Fastest[0].duration = availableDuration['driving-traffic'];
+            update.Fastest[1].duration = availableDuration['cycling'];
+            update.Fastest[2].duration = availableDuration['walking'];
+
+            console.log(update);
+            return update;
+        })
+    }, [availableDistances, availableDuration]);
 
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
@@ -357,59 +438,140 @@ export default function Maps() {
                 style={{display: "flex absolute"}}
                 mapStyle="mapbox://styles/mapbox/dark-v10"
             >
-                <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
-                    <Layer  {...activeRoutesLayer} />
-                </Source>
                 <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
                     <Layer {...inactiveRoutesLayer} />
                 </Source>
+                <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
+                    <Layer  {...activeRoutesLayer} />
+                </Source>
             </Map>
         </div>
-        <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
-            <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
-                <div className="md:mr-4">
-                    <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
-                        Origin
-                        <Switch
-                            checked={markerSelector === 'startLocation'}
-                            onChange={() => markerSelector === 'startLocation' ? setMarkerSelector('') : setMarkerSelector('startLocation')} // toggle
-                            className='ml-auto mr-2'
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector === 'startLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                        </Switch>
-                        
-                    </label>
-                        <input autoComplete="street-address" className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
+        <Transition
+            appear={true}
+            as={Fragment}
+            show={isShowingTopMenu}
+            enter="transform duration-200 transition ease-in-out"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 rotate-0 scale-100"
+            leave="transform duration-200 transition ease-in-out"
+            leaveFrom="opacity-100 rotate-0 scale-100 "
+            leaveTo="opacity-0 scale-95 "
+        >
+            <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
+                <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
+                    <div className="md:mr-4">
+                        <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
+                            Origin
+                            <Switch
+                                checked={markerSelector === 'startLocation'}
+                                onChange={() => markerSelector === 'startLocation' ? setMarkerSelector('') : setMarkerSelector('startLocation')} // toggle
+                                className='ml-auto mr-2'
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector === 'startLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </Switch>
+                            
+                        </label>
+                            <input autoComplete="street-address" className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
+                    </div>
+                    <div className="">
+                        <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
+                            Destination
+                            <Switch
+                                checked={markerSelector === 'endLocation'}
+                                onChange={() => markerSelector === 'endLocation' ? setMarkerSelector('') : setMarkerSelector('endLocation')} // toggle 
+                                className='ml-auto mr-2'
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector == 'endLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </Switch>
+                        </label>
+                            <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                                id="End Point" 
+                                type="text" 
+                                placeholder="Enter end point" 
+                                ref={endRef}
+                            />
+                    </div>
                 </div>
-                <div className="">
-                    <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
-                        Destination
-                        <Switch
-                            checked={markerSelector === 'endLocation'}
-                            onChange={() => markerSelector === 'endLocation' ? setMarkerSelector('') : setMarkerSelector('endLocation')} // toggle 
-                            className='ml-auto mr-2'
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector == 'endLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                        </Switch>
-                    </label>
-                        <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="End Point" type="text" placeholder="Enter end point" ref={endRef}/>
+                <div className="flex items-center justify-between sm:flex-row">
+                    <span className="sm:ml-5">
+                        {"distance: " + `${displayDistance !== '' ? displayDistance : ''}`}
+                    </span>
+                    <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" 
+                        type="button" 
+                        onClick={calculateRoute}>
+                        Calculate
+                    </button>
                 </div>
-            </div>
-            <div className="flex items-center justify-between sm:flex-row">
-                <span className="sm:ml-5">
-                    {"distance: " + `${displayDistance !== '' ? displayDistance : ''}`}
-                </span>
-                <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" type="button" onClick={calculateRoute}>
-                    Calculate
-                </button>
-            </div>
-        </Form>
+            </Form>
+        </Transition>
+        <div className="w-full max-w-md px-2 py-16 sm:px-0">
+      <Tab.Group>
+        <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
+          {Object.keys(categories).map((category) => (
+            <Tab
+              key={category}
+              className={({ selected }) =>
+                classNames(
+                  'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700',
+                  'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+                  selected
+                    ? 'bg-white shadow'
+                    : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                )
+              }
+            >
+              {category}
+            </Tab>
+          ))}
+        </Tab.List>
+        <Tab.Panels className="mt-2">
+            {Object.values(categories).map((posts, idx) => (
+                <Tab.Panel
+                key={idx}
+                className={classNames(
+                    'rounded-xl bg-white p-3',
+                    'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
+                )}
+                >
+                <ul>
+                    {posts.map((post) => (
+                    <li
+                        key={post.id}
+                        className="relative rounded-md p-3 hover:bg-gray-100"
+                    >
+                        <h3 className="text-sm font-medium leading-5">
+                        {post.title}
+                        </h3>
+
+                        <ul className="mt-1 flex space-x-1 text-xs font-normal leading-4 text-gray-500">
+                        <li>{post.distance}</li>
+                        <li>&middot;</li>
+                        <li>{post.duration}</li>
+                        <li>&middot;</li>
+                        {/* <li>{post.shareCount}</li> */}
+                        </ul>
+
+                        <a
+                        href="#"
+                        className={classNames(
+                            'absolute inset-0 rounded-md',
+                            'ring-blue-400 focus:z-10 focus:outline-none focus:ring-2'
+                        )}
+                        />
+                    </li>
+                    ))}
+                </ul>
+                </Tab.Panel>
+            ))}
+            </Tab.Panels>
+        </Tab.Group>
+    </div>
     </div>
     );
 }
