@@ -13,6 +13,13 @@ export async function loader({ request }: LoaderArgs) {
 declare type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
 export const libraries:Libraries = ['places']
 
+declare type Routes = {
+    [index: string]: GeoJSON.Feature,
+}
+
+declare type NameValue = {
+    [index: string]: string,
+}
 
 /**
  * The main map function with overlays.
@@ -28,18 +35,16 @@ export default function Maps() {
     const directionService = new MapboxDirectionsModule({
         accessToken: apiKey,
         unit: 'metric',
-        profile: 'mapbox/driving',
         alternatives: false,
         geometries: 'geojson',
         controls: { instructions: false },
-        flyTo: true
+        flyTo: true,
     })
     const geocodingClient = new MapboxGeocoderSDK({
         accessToken: apiKey
     })
 
-    const [markerSelector, setMarkerSelector] = useState<string>('');
-
+    const travelTypes: string[] = ['driving-traffic', 'walking', 'cycling'];
     const lowerLat = 1.2;
     const upperLat = 1.48;
     const lowerLng = 103.59;
@@ -50,6 +55,7 @@ export default function Maps() {
 
     const startMarker = useRef<mapboxgl.Marker>();
     const endMarker = useRef<mapboxgl.Marker>();
+    const [markerSelector, setMarkerSelector] = useState<string>('');
 
     // Set up map and marker after map is fully loaded
     useEffect(() => {
@@ -70,26 +76,42 @@ export default function Maps() {
     const [startLngLat, setStartLngLat] = useState<mapboxgl.LngLat>();
     const [endLngLat, setEndLngLat] = useState<mapboxgl.LngLat>();
 
-
-
-    const [displayRoute, setDisplayRoute] = useState<GeoJSON.Feature>({
+    const placeholderFeature: GeoJSON.Feature = {
         type: "Feature",
         geometry: {
             type: 'LineString',
             coordinates: [],
         },
         properties: null
+    }
+
+    const [activeTravelType, setActiveTravelType] = useState<string>('driving-traffic');
+    const [activeRoute, setActiveRoute] = useState<GeoJSON.Feature>();
+    const [inactiveRoutes , setInactiveRoutes] = useState<GeoJSON.FeatureCollection>();
+    const [availableRoutes, setAvailableRoutes] = useState<Routes>({
+        'driving-traffic': placeholderFeature,
+        'cycling': placeholderFeature,
+        'walking': placeholderFeature,
+    });
+    const [availableDistances, setAvailableDistances] = useState<NameValue>({
+        'driving-traffic': '',
+        'cycling': '',
+        'walking': '',
+    });
+    const [availableDuration, setAvailableDuration] = useState<NameValue>({
+        'driving-traffic': '',
+        'cycling': '',
+        'walking': '',
     });
 
-    const routesLayer: mapboxgl.LineLayer = {
-        id: 'routes',
+    const activeRoutesLayer: mapboxgl.LineLayer = {
+        id: 'routes-active',
         type: 'line',
-        source: 'routes-path',
         layout: {
           'line-cap': 'round',
         },
         paint: {
-          'line-color': '#f01b48',
+          'line-color': '#20ba44',
           'line-gradient': [
             'interpolate',
             ['linear'],
@@ -112,20 +134,73 @@ export default function Maps() {
             ['linear'],
             ['zoom'],
             12,
-            2,
-            16,
             5,
+            16,
+            13,
             22,
-            10,
+            25,
           ],
         },
       }
 
-    const parseDistance = (distance: number) : string => {
-        if (distance < 1000) {
+      const inactiveRoutesLayer: mapboxgl.LineLayer = {
+        id: 'routes-inactive',
+        type: 'line',
+        layout: {
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': '#a0a0a0',
+          'line-gradient': [
+            'interpolate',
+            ['linear'],
+            ['line-progress'],
+            0,
+            '#a0a0a0',
+            1,
+            '#a0a0a0',
+          ],
+          'line-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            1,
+            ['boolean', ['feature-state', 'fadein'], false],
+            0.07,
+            0.5, // default
+          ],
+          'line-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            12,
+            5,
+            16,
+            13,
+            22,
+            25,
+          ],
+        },
+      }
+
+    const parseDistance = (distance: number | undefined) : string => {
+        if (distance == undefined) {
+            return ''
+        } else if (distance < 1000) {
             return distance.toFixed(0) + ' m';
         } else {
             return (distance / 1000).toFixed(1) + ' km'
+        }
+    }
+
+    const parseDuration = (duration: number | undefined) : string => {
+        if (duration == undefined) {
+            return ''
+        } else if (duration < 60) {
+            return 1 + ' min';
+        } else if (duration < 3600) {
+            return (duration / 60).toFixed(0) + ' mins'
+        } else {
+            return (duration / 3600).toFixed(0) + ' h ' + ((duration % 3600) / 60).toFixed(0) + ' mins'
         }
     }
 
@@ -136,9 +211,11 @@ export default function Maps() {
 
         // Public transport is not included here as mapbox does not support it natively
         // TODO: add another api that calculates public transit time/ distance and display those data without directions due to TOS restrictions
-        const travelTypes = ['driving-traffic', 'walking', 'cycling'];
+        const newRoutes: Routes = {};
+        const newDistances: NameValue = {};
+        const newDuration: NameValue = {};
 
-        const results = travelTypes.map((travelType) => 
+        await Promise.all(travelTypes.map((travelType) => 
             directionService.getDirections({
                 profile: travelType,
                 waypoints: [
@@ -148,34 +225,56 @@ export default function Maps() {
                 {
                     coordinates: [endLngLat.lng, endLngLat.lat],
                 }
-                ]
+                ],
+                overview: "full",
             })
             .send()
             .then((response: any) => {
                 const geoJsonFormat = toGeoJSON(response.body.routes[0].geometry);
                 console.log(response.body);
                 console.log(geoJsonFormat);
-
-                setDisplayRoute({    
+                
+                newRoutes[travelType] = {    
                     type: "Feature",
                 geometry: geoJsonFormat,
-                properties: null});
-
-                setDisplayDistance(parseDistance(response.body.routes[0].distance));
-            })
+                properties: null};
+                newDistances[travelType] = parseDistance(response.body.routes[0].distance);
+                newDuration[travelType] = parseDuration(response.body.routes[0].duration);
+            }))
         );
-
         
-        // mapboxMap?.getMap().getSource('routes').setData({
-        //     type: 'FeatureCollection',
-        //     features: geoJsonFormat.map((geometry) => ({
-        //       type: 'Feature',
-        //       properties: {},
-        //       geometry,
-        //     })),
-        //   });
-        // setDuration(results.routes[0].legs[0].duration!.text);
+        setAvailableRoutes(newRoutes);
+        setAvailableDistances(newDistances);
+        setAvailableDuration(newDuration);
+        console.log(newRoutes)
     }
+
+    // Set the feature to be displayed in color
+    useEffect(() => {
+        const features: GeoJSON.Feature[] = [];
+        travelTypes.forEach(travelType => {
+            if (travelType !== activeTravelType) {
+                features.push(availableRoutes[travelType]);
+            }
+        });
+
+        setInactiveRoutes({
+            type: "FeatureCollection",
+            features: features
+        });
+
+
+        if (activeTravelType !== undefined) {
+            setActiveRoute(availableRoutes[activeTravelType]);
+            console.log(activeRoute)
+        }
+    }, [activeTravelType, availableRoutes]);
+
+    // Set active distance and duration displayed
+    useEffect(() => {
+        setDisplayDistance(availableDistances[activeTravelType]);
+        setDisplayDuration(availableDuration[activeTravelType]);
+    }, [activeTravelType, availableDistances, availableDuration]);
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
         if (marker.current !== undefined && latLng !== null) {
@@ -205,22 +304,31 @@ export default function Maps() {
         }
         return String(latLng?.lng + ', ' + latLng?.lat);
     }
-    
-    const mapClick = async (e: mapboxgl.MapLayerMouseEvent) => {
-        if (startRef.current !== null && markerSelector === 'startLocation') {      
-            const feature = await getFeatureFromCoordinates(e.lngLat);
-            startRef.current.value = getPlaceName(feature, e.lngLat);
-            setStartLngLat(e.lngLat);
-            placeMarker(e.lngLat, startMarker);
+
+    const setMarkers = async (lngLat: mapboxgl.LngLat) => {
+        if (startRef.current !== null && markerSelector === 'startLocation') {
+            const feature = await getFeatureFromCoordinates(lngLat);
+            startRef.current.value = getPlaceName(feature, lngLat);
+            setStartLngLat(lngLat);
+            placeMarker(lngLat, startMarker);
 
             // startMarker?.setLngLat(e.lngLat);
         } else if (endRef.current !== null && markerSelector === 'endLocation') {
-            const feature = await getFeatureFromCoordinates(e.lngLat);
-            endRef.current.value = getPlaceName(feature, e.lngLat);
-            setEndLngLat(e.lngLat);
-            placeMarker(e.lngLat, endMarker);
-        } 
+            const feature = await getFeatureFromCoordinates(lngLat);
+            endRef.current.value = getPlaceName(feature, lngLat);
+            setEndLngLat(lngLat);
+            placeMarker(lngLat, endMarker);
+        }
         setMarkerSelector('');
+    }
+    
+    const mapClick = async (e: mapboxgl.MapLayerMouseEvent) => {
+        if (markerSelector !== '') {
+            await setMarkers(e.lngLat);
+        } else if (e.features != undefined) {
+            console.log(e.features)
+        }
+
     }
 
     return (
@@ -244,17 +352,16 @@ export default function Maps() {
                 touchPitch={false}
                 onClick={mapClick}
                 ref={mapboxMapRef}
-                // fitBoundsOptions={
-                //   padding: BREAKPOINT()
-                //     ? 120
-                //     : { top: 40, bottom: window.innerHeight / 2, left: 40, right: 40 },
-                // }
+                reuseMaps={true}
 
                 style={{display: "flex absolute"}}
                 mapStyle="mapbox://styles/mapbox/dark-v10"
             >
-                <Source id="routes" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={displayRoute}>
-                    <Layer {...routesLayer} />
+                <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
+                    <Layer  {...activeRoutesLayer} />
+                </Source>
+                <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
+                    <Layer {...inactiveRoutesLayer} />
                 </Source>
             </Map>
         </div>
