@@ -5,7 +5,7 @@ import { Form, useLoaderData } from "@remix-run/react";
 import { Fragment, MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toGeoJSON } from '@mapbox/polyline';
 import mapboxgl from "mapbox-gl";
-import { NameValue } from "~/types/types";
+import { NameValue, SidebarData } from "~/types/types";
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -233,14 +233,13 @@ export default function Maps() {
             })
             .send()
             .then((response: any) => {
-                const geoJsonFormat = toGeoJSON(response.body.routes[0].geometry);
-                console.log(response.body);
-                console.log(geoJsonFormat);
+                const geometry = toGeoJSON(response.body.routes[0].geometry);
                 
                 newRoutes[travelType] = {    
                     type: "Feature",
-                geometry: geoJsonFormat,
-                properties: null};
+                    geometry: geometry,
+                    properties: null
+                };
                 newDistances[travelType] = parseDistance(response.body.routes[0].distance);
                 newDuration[travelType] = parseDuration(response.body.routes[0].duration);
             }))
@@ -249,7 +248,6 @@ export default function Maps() {
         setAvailableRoutes(newRoutes);
         setAvailableDistances(newDistances);
         setAvailableDuration(newDuration);
-        console.log(newRoutes)
     }
 
     // Set the feature to be displayed in color
@@ -333,46 +331,48 @@ export default function Maps() {
         }
     }
 
-    const [categories, setCategories] = useState({
-        Fastest: [
-          {
+    const categories = [
+        'Fastest',
+        'Nicest'
+    ];
+
+    const [sidebarData, setSidebarData] = useState<SidebarData[]>([
+        {
             id: 1,
             title: 'Driving',
+            type: 'driving-traffic',
             distance: '',
             duration: '',
-            shareCount: 2,
-          },
-          {
+            carbon: '2',
+        },
+        {
             id: 2,
             title: 'Cycling',
+            type: 'cycling',
             distance: '',
             duration: '',
-            shareCount: 2,
-          },
-          {
+            carbon: '2',
+        },
+        {
             id: 3,
             title: 'Walking',
+            type: 'walking',
             distance: '',
             duration: '',
-            shareCount: 2,
-          },
-        ],
-      })
+            carbon: '2',
+        }
+    ]);
 
     useEffect(() => {
-        setCategories((prevState) => {
-            const update = {
+        setSidebarData((prevState: SidebarData[]): SidebarData[] => {
+            const update: SidebarData[] = [
                 ...prevState,
-            };
-            update.Fastest[0].distance = availableDistances['driving-traffic'];
-            update.Fastest[1].distance = availableDistances['cycling'];
-            update.Fastest[2].distance = availableDistances['walking'];
+            ];
 
-            update.Fastest[0].duration = availableDuration['driving-traffic'];
-            update.Fastest[1].duration = availableDuration['cycling'];
-            update.Fastest[2].duration = availableDuration['walking'];
-
-            console.log(update);
+            update.map((value) => {
+                value.distance = availableDistances[value.type]
+                value.duration = availableDuration[value.type]
+            })
             return update;
         })
     }, [availableDistances, availableDuration]);
@@ -476,7 +476,7 @@ export default function Maps() {
             <div className="hidden md:block w-full max-w-md px-2 py-16 sm:px-0">
                 <Tab.Group>
                     <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
-                    {Object.keys(categories).map((category) => (
+                    {categories.map((category) => (
                         <Tab
                         key={category}
                         className={({ selected }) =>
@@ -494,7 +494,7 @@ export default function Maps() {
                     ))}
                     </Tab.List>
                     <Tab.Panels className="mt-2">
-                        {Object.values(categories).map((posts, idx) => (
+                        {categories.map((posts, idx) => (
                             <Tab.Panel
                             key={idx}
                             className={classNames(
@@ -503,7 +503,7 @@ export default function Maps() {
                             )}
                             >
                             <ul>
-                                {posts.map((post) => (
+                                {sidebarData.map((post) => (
                                 <li
                                     key={post.id}
                                     className="relative rounded-md p-3 hover:bg-gray-100"
@@ -511,7 +511,6 @@ export default function Maps() {
                                     <h3 className="text-sm font-medium leading-5">
                                     {post.title}
                                     </h3>
-
                                     <ul className="mt-1 flex space-x-1 text-xs font-normal leading-4 text-gray-500">
                                     <li>{post.distance}</li>
                                     <li>&middot;</li>
