@@ -57,9 +57,9 @@ export default function Maps() {
 
     const travelTypes: string[] = ['driving-traffic', 'walking', 'cycling'];
     const carbonMultipliers: CarbonMultipliers = {
-        'driving-traffic': 271,
-        'cycling': 21,
-        'walking': 56,
+        'driving-traffic': 271, // single person
+        'cycling': 5, // manufacturing emissions
+        'walking': 0.0005, // manufacturing shoes + disposal 0.3kgCO2, 600km lifespan
         'public-transport': 0, // TODO: get a coefficient
     }
     const lowerLat = 1.2;
@@ -320,25 +320,25 @@ export default function Maps() {
             id: 1,
             title: 'Driving',
             type: 'driving-traffic',
-            distance: null,
-            duration: null,
-            carbon: null,
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
         },
         {
             id: 2,
             title: 'Cycling',
             type: 'cycling',
-            distance: null,
-            duration: null,
-            carbon: null,
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
         },
         {
             id: 3,
             title: 'Walking',
             type: 'walking',
-            distance: null,
-            duration: null,
-            carbon: null,
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
         }
     ]);
 
@@ -349,8 +349,9 @@ export default function Maps() {
             ];
 
             update.map((value) => {
-                value.distance = routesDistances[value.type]
-                value.duration = routesDuration[value.type]
+                value.distanceMeters = routesDistances[value.type]
+                value.durationSeconds = routesDuration[value.type]
+                value.carbonGrams = (routesDistances[value.type] / 1000) * carbonMultipliers[value.type]
             })
             console.log(update)
             return update;

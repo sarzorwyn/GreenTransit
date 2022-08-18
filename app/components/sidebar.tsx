@@ -17,25 +17,35 @@ export default function Sidebar(props: SidebarProps) {
         'Nicest'
     ];
 
-    const parseDistance = (distance: number | undefined) : string => {
-        if (distance == undefined || distance == 0) {
-            return ''
-        } else if (distance < 1000) {
-            return distance.toFixed(0) + ' m';
+    const parseDistance = (distanceMeters: number | undefined) : string => {
+        if (distanceMeters == undefined || distanceMeters == 0) {
+            return '- km'
+        } else if (distanceMeters < 1000) {
+            return distanceMeters.toFixed(0) + ' m';
         } else {
-            return (distance / 1000).toFixed(1) + ' km'
+            return (distanceMeters / 1000).toFixed(1) + ' km'
         }
     }
 
-    const parseDuration = (duration: number | undefined) : string => {
-        if (duration == undefined || duration == 0) {
-            return ''
-        } else if (duration < 60) {
+    const parseDuration = (durationSeconds: number | undefined) : string => {
+        if (durationSeconds == undefined || durationSeconds == 0) {
+            return '- mins'
+        } else if (durationSeconds < 60) {
             return 1 + ' min';
-        } else if (duration < 3600) {
-            return (duration / 60).toFixed(0) + ' mins'
+        } else if (durationSeconds < 3600) {
+            return (durationSeconds / 60).toFixed(0) + ' mins'
         } else {
-            return (duration / 3600).toFixed(0) + ' h ' + ((duration % 3600) / 60).toFixed(0) + ' mins'
+            return (durationSeconds / 3600).toFixed(0) + ' h ' + ((durationSeconds % 3600) / 60).toFixed(0) + ' mins'
+        }
+    }
+
+    const parseCarbon = (carbonGrams: number | undefined) : string => {
+        if (carbonGrams == undefined || carbonGrams == 0) {
+            return '- kg CO2';
+        } else if (carbonGrams < 1) {
+            return 'Negligible';
+        } else {
+            return (carbonGrams / 1000).toFixed(3) + ' kg';
         }
     }
 
@@ -78,11 +88,11 @@ export default function Sidebar(props: SidebarProps) {
                             {transport.title}
                             </h3>
                             <ul className="mt-1 flex space-x-1 text-xs font-normal leading-4 text-gray-500">
-                            <li>{parseDistance(transport.distance)}</li>
+                            <li>{parseDistance(transport.distanceMeters)}</li>
                             <li>&middot;</li>
-                            <li>{parseDuration(transport.duration)}</li>
+                            <li>{parseDuration(transport.durationSeconds)}</li>
                             <li>&middot;</li>
-                            <li>{transport.carbon}</li>
+                            <li>{parseCarbon(transport.carbonGrams)}</li>
                             </ul>
 
                             <a

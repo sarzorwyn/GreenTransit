@@ -8,7 +8,7 @@ export declare type SidebarData = {
     id: number,
     title: string,
     type: ('driving-traffic' | 'cycling' | 'walking' | 'public-transport'),
-    distance: number,
-    duration: number,
-    carbon: number,
+    distanceMeters: number,
+    durationSeconds: number,
+    carbonGrams: number,
 }
