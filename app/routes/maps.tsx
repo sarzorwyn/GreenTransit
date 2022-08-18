@@ -5,6 +5,7 @@ import { Form, useLoaderData } from "@remix-run/react";
 import { Fragment, MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toGeoJSON } from '@mapbox/polyline';
 import mapboxgl from "mapbox-gl";
+import { NameValue } from "~/types/types";
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -19,10 +20,6 @@ export const libraries:Libraries = ['places']
 
 declare type Routes = {
     [index: string]: GeoJSON.Feature,
-}
-
-declare type NameValue = {
-    [index: string]: string,
 }
 
 /**
@@ -336,7 +333,7 @@ export default function Maps() {
         }
     }
 
-    let [categories, setCategories] = useState({
+    const [categories, setCategories] = useState({
         Fastest: [
           {
             id: 1,
@@ -357,38 +354,6 @@ export default function Maps() {
             title: 'Walking',
             distance: '',
             duration: '',
-            shareCount: 2,
-          },
-        ],
-        Popular: [
-          {
-            id: 1,
-            title: 'Is tech making coffee better or worse?',
-            distance: 'Jan 7',
-            duration: 29,
-            shareCount: 16,
-          },
-          {
-            id: 2,
-            title: 'The most innovative things happening in coffee',
-            distance: 'Mar 19',
-            duration: 24,
-            shareCount: 12,
-          },
-        ],
-        Trending: [
-          {
-            id: 1,
-            title: 'Ask Me Anything: 10 answers to your questions about coffee',
-            distance: '2d ago',
-            duration: 9,
-            shareCount: 5,
-          },
-          {
-            id: 2,
-            title: "The worst advice we've ever heard about coffee",
-            distance: '4d ago',
-            duration: 1,
             shareCount: 2,
           },
         ],
@@ -499,9 +464,6 @@ export default function Maps() {
                     </div>
                 </div>
                 <div className="flex items-center justify-between sm:flex-row">
-                    <span className="sm:ml-5">
-                        {"distance: " + `${displayDistance !== '' ? displayDistance : ''}`}
-                    </span>
                     <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" 
                         type="button" 
                         onClick={calculateRoute}>
@@ -510,68 +472,71 @@ export default function Maps() {
                 </div>
             </Form>
         </Transition>
-        <div className="w-full max-w-md px-2 py-16 sm:px-0">
-      <Tab.Group>
-        <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
-          {Object.keys(categories).map((category) => (
-            <Tab
-              key={category}
-              className={({ selected }) =>
-                classNames(
-                  'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700',
-                  'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-                  selected
-                    ? 'bg-white shadow'
-                    : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
-                )
-              }
-            >
-              {category}
-            </Tab>
-          ))}
-        </Tab.List>
-        <Tab.Panels className="mt-2">
-            {Object.values(categories).map((posts, idx) => (
-                <Tab.Panel
-                key={idx}
-                className={classNames(
-                    'rounded-xl bg-white p-3',
-                    'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
-                )}
-                >
-                <ul>
-                    {posts.map((post) => (
-                    <li
-                        key={post.id}
-                        className="relative rounded-md p-3 hover:bg-gray-100"
-                    >
-                        <h3 className="text-sm font-medium leading-5">
-                        {post.title}
-                        </h3>
-
-                        <ul className="mt-1 flex space-x-1 text-xs font-normal leading-4 text-gray-500">
-                        <li>{post.distance}</li>
-                        <li>&middot;</li>
-                        <li>{post.duration}</li>
-                        <li>&middot;</li>
-                        {/* <li>{post.shareCount}</li> */}
-                        </ul>
-
-                        <a
-                        href="#"
-                        className={classNames(
-                            'absolute inset-0 rounded-md',
-                            'ring-blue-400 focus:z-10 focus:outline-none focus:ring-2'
-                        )}
-                        />
-                    </li>
+        <div className="fixed inset-0 z-40 left-auto" >
+            <div className="hidden md:block w-full max-w-md px-2 py-16 sm:px-0">
+                <Tab.Group>
+                    <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
+                    {Object.keys(categories).map((category) => (
+                        <Tab
+                        key={category}
+                        className={({ selected }) =>
+                            classNames(
+                            'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700',
+                            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+                            selected
+                                ? 'bg-white shadow'
+                                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
+                            )
+                        }
+                        >
+                        {category}
+                        </Tab>
                     ))}
-                </ul>
-                </Tab.Panel>
-            ))}
-            </Tab.Panels>
-        </Tab.Group>
-    </div>
+                    </Tab.List>
+                    <Tab.Panels className="mt-2">
+                        {Object.values(categories).map((posts, idx) => (
+                            <Tab.Panel
+                            key={idx}
+                            className={classNames(
+                                'rounded-xl bg-white p-3',
+                                'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
+                            )}
+                            >
+                            <ul>
+                                {posts.map((post) => (
+                                <li
+                                    key={post.id}
+                                    className="relative rounded-md p-3 hover:bg-gray-100"
+                                >
+                                    <h3 className="text-sm font-medium leading-5">
+                                    {post.title}
+                                    </h3>
+
+                                    <ul className="mt-1 flex space-x-1 text-xs font-normal leading-4 text-gray-500">
+                                    <li>{post.distance}</li>
+                                    <li>&middot;</li>
+                                    <li>{post.duration}</li>
+                                    <li>&middot;</li>
+                                    {/* <li>{post.shareCount}</li> */}
+                                    </ul>
+
+                                    <a
+                                    href="#"
+                                    className={classNames(
+                                        'absolute inset-0 rounded-md',
+                                        'ring-blue-400 focus:z-10 focus:outline-none focus:ring-2'
+                                    )}
+                                    />
+                                </li>
+                                ))}
+                            </ul>
+                        </Tab.Panel>
+                    ))}
+                    </Tab.Panels>
+                </Tab.Group>
+            </div>
+            {/* <div className="fixed inset-0 bg-gray-600 bg-opacity-0"></div> */}
+        </div>
     </div>
     );
 }
