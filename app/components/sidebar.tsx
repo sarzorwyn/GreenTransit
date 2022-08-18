@@ -1,100 +1,48 @@
-import { Tab } from "@headlessui/react/dist/components/tabs/tabs";
+import { Tab } from "@headlessui/react";
 import { useLoaderData } from "@remix-run/react";
 import { useState } from "react";
-import { NameValue } from "~/types/types";
+import { NameValue, SidebarData } from "~/types/types";
 
 function classNames(...classes: string[]) {
     return classes.filter(Boolean).join(' ')
 }
 
-export async function loader() {
-    return {
-        Fastest: [
-          {
-            id: 1,
-            title: 'Driving',
-            type: 'driving-traffic',
-            distance: '',
-            duration: '',
-            shareCount: 2,
-          },
-          {
-            id: 2,
-            title: 'Cycling',
-            type: 'cycling',
-            distance: '',
-            duration: '',
-            shareCount: 2,
-          },
-          {
-            id: 3,
-            title: 'Walking',
-            type: 'walking',
-            distance: '',
-            duration: '',
-            shareCount: 2,
-          },
-        ],
-    }
+type SidebarProps = {
+    sidebarData: SidebarData[]
 }
 
-export default function Sidebar(distances: NameValue, duration: NameValue) {
-    const [categories, setCategories] = useState({Fastest: [
-        {
-          id: 1,
-          title: 'Driving',
-          type: 'driving-traffic',
-          distance: '',
-          duration: '',
-          shareCount: 2,
-        },
-        {
-          id: 2,
-          title: 'Cycling',
-          type: 'cycling',
-          distance: '',
-          duration: '',
-          shareCount: 2,
-        },
-        {
-          id: 3,
-          title: 'Walking',
-          type: 'walking',
-          distance: '',
-          duration: '',
-          shareCount: 2,
-        },
-      ],});
+export default function Sidebar(props: SidebarProps) {
+    const categories = [
+        'Fastest',
+        'Nicest'
+    ];
 
-    const test = [        {
-        id: 1,
-        title: 'Driving',
-        type: 'driving-traffic',
-        distance: '',
-        duration: '',
-        shareCount: 2,
-      },
-      {
-        id: 2,
-        title: 'Cycling',
-        type: 'cycling',
-        distance: '',
-        duration: '',
-        shareCount: 2,
-      },
-      {
-        id: 3,
-        title: 'Walking',
-        type: 'walking',
-        distance: '',
-        duration: '',
-        shareCount: 2,
-      },]
+    const parseDistance = (distance: number | undefined) : string => {
+        if (distance == undefined || distance == 0) {
+            return ''
+        } else if (distance < 1000) {
+            return distance.toFixed(0) + ' m';
+        } else {
+            return (distance / 1000).toFixed(1) + ' km'
+        }
+    }
+
+    const parseDuration = (duration: number | undefined) : string => {
+        if (duration == undefined || duration == 0) {
+            return ''
+        } else if (duration < 60) {
+            return 1 + ' min';
+        } else if (duration < 3600) {
+            return (duration / 60).toFixed(0) + ' mins'
+        } else {
+            return (duration / 3600).toFixed(0) + ' h ' + ((duration % 3600) / 60).toFixed(0) + ' mins'
+        }
+    }
 
     return (
         <Tab.Group>
             <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
-            {Object.keys(categories).map((category) => (
+            {categories.map((category) => (
                 <Tab
                 key={category}
                 className={({ selected }) =>
@@ -112,7 +60,7 @@ export default function Sidebar(distances: NameValue, duration: NameValue) {
             ))}
             </Tab.List>
             <Tab.Panels className="mt-2">
-                {Object.values(categories).map((posts, idx) => (
+                {categories.map((posts, idx) => (
                     <Tab.Panel
                     key={idx}
                     className={classNames(
@@ -121,21 +69,20 @@ export default function Sidebar(distances: NameValue, duration: NameValue) {
                     )}
                     >
                     <ul>
-                        {test.map((post) => (
+                        {props.sidebarData.map((transport) => (
                         <li
-                            key={post.id}
+                            key={transport.id}
                             className="relative rounded-md p-3 hover:bg-gray-100"
                         >
                             <h3 className="text-sm font-medium leading-5">
-                            {post.title}
+                            {transport.title}
                             </h3>
-
                             <ul className="mt-1 flex space-x-1 text-xs font-normal leading-4 text-gray-500">
-                            <li>{post.distance}</li>
+                            <li>{parseDistance(transport.distance)}</li>
                             <li>&middot;</li>
-                            <li>{post.duration}</li>
+                            <li>{parseDuration(transport.duration)}</li>
                             <li>&middot;</li>
-                            {/* <li>{post.shareCount}</li> */}
+                            <li>{transport.carbon}</li>
                             </ul>
 
                             <a

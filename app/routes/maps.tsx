@@ -6,6 +6,7 @@ import { Fragment, MutableRefObject, useEffect, useLayoutEffect, useRef, useStat
 import { toGeoJSON } from '@mapbox/polyline';
 import mapboxgl from "mapbox-gl";
 import { NameValue, SidebarData } from "~/types/types";
+import Sidebar from "~/components/sidebar";
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -15,11 +16,18 @@ export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
 }
 
-declare type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
+type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
 export const libraries:Libraries = ['places']
 
-declare type Routes = {
+type Routes = {
     [index: string]: GeoJSON.Feature,
+}
+
+type CarbonMultipliers = {
+    'driving-traffic': number,
+    'cycling': number,
+    'walking': number,
+    'public-transport': number,
 }
 
 /**
@@ -48,6 +56,12 @@ export default function Maps() {
     });
 
     const travelTypes: string[] = ['driving-traffic', 'walking', 'cycling'];
+    const carbonMultipliers: CarbonMultipliers = {
+        'driving-traffic': 271,
+        'cycling': 21,
+        'walking': 56,
+        'public-transport': 0, // TODO: get a coefficient
+    }
     const lowerLat = 1.2;
     const upperLat = 1.48;
     const lowerLng = 103.59;
@@ -69,9 +83,6 @@ export default function Maps() {
             endMarker.current = new mapboxgl.Marker({color: "#972FFE"})
         }
     }, [mapboxMapRef.current?.loaded])
-
-    const [displayDistance, setDisplayDistance] = useState<string>('');
-    const [displayDuration, setDisplayDuration] = useState<string>('');
 
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
@@ -96,16 +107,17 @@ export default function Maps() {
         'cycling': placeholderFeature,
         'walking': placeholderFeature,
     });
-    const [availableDistances, setAvailableDistances] = useState<NameValue>({
-        'driving-traffic': '',
-        'cycling': '',
-        'walking': '',
+    const [routesDistances, setRoutesDistances] = useState<NameValue>({
+        'driving-traffic': 0,
+        'cycling': 0,
+        'walking': 0,
     });
-    const [availableDuration, setAvailableDuration] = useState<NameValue>({
-        'driving-traffic': '',
-        'cycling': '',
-        'walking': '',
+    const [routesDuration, setRoutesDuration] = useState<NameValue>({
+        'driving-traffic': 0,
+        'cycling': 0,
+        'walking': 0,
     });
+
 
     const activeRoutesLayer: mapboxgl.LineLayer = {
         id: 'routes-active',
@@ -185,28 +197,6 @@ export default function Maps() {
         },
       }
 
-    const parseDistance = (distance: number | undefined) : string => {
-        if (distance == undefined) {
-            return ''
-        } else if (distance < 1000) {
-            return distance.toFixed(0) + ' m';
-        } else {
-            return (distance / 1000).toFixed(1) + ' km'
-        }
-    }
-
-    const parseDuration = (duration: number | undefined) : string => {
-        if (duration == undefined) {
-            return ''
-        } else if (duration < 60) {
-            return 1 + ' min';
-        } else if (duration < 3600) {
-            return (duration / 60).toFixed(0) + ' mins'
-        } else {
-            return (duration / 3600).toFixed(0) + ' h ' + ((duration % 3600) / 60).toFixed(0) + ' mins'
-        }
-    }
-
     const calculateRoute = async () => {
         if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
             return;
@@ -240,14 +230,14 @@ export default function Maps() {
                     geometry: geometry,
                     properties: null
                 };
-                newDistances[travelType] = parseDistance(response.body.routes[0].distance);
-                newDuration[travelType] = parseDuration(response.body.routes[0].duration);
+                newDistances[travelType] = response.body.routes[0].distance;
+                newDuration[travelType] = response.body.routes[0].duration;
             }))
         );
         
         setAvailableRoutes(newRoutes);
-        setAvailableDistances(newDistances);
-        setAvailableDuration(newDuration);
+        setRoutesDistances(newDistances);
+        setRoutesDuration(newDuration);
     }
 
     // Set the feature to be displayed in color
@@ -270,12 +260,6 @@ export default function Maps() {
             console.log(activeRoute)
         }
     }, [activeTravelType, availableRoutes]);
-
-    // Set active distance and duration displayed
-    useEffect(() => {
-        setDisplayDistance(availableDistances[activeTravelType]);
-        setDisplayDuration(availableDuration[activeTravelType]);
-    }, [activeTravelType, availableDistances, availableDuration]);
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
         if (marker.current !== undefined && latLng !== null) {
@@ -331,35 +315,30 @@ export default function Maps() {
         }
     }
 
-    const categories = [
-        'Fastest',
-        'Nicest'
-    ];
-
     const [sidebarData, setSidebarData] = useState<SidebarData[]>([
         {
             id: 1,
             title: 'Driving',
             type: 'driving-traffic',
-            distance: '',
-            duration: '',
-            carbon: '2',
+            distance: null,
+            duration: null,
+            carbon: null,
         },
         {
             id: 2,
             title: 'Cycling',
             type: 'cycling',
-            distance: '',
-            duration: '',
-            carbon: '2',
+            distance: null,
+            duration: null,
+            carbon: null,
         },
         {
             id: 3,
             title: 'Walking',
             type: 'walking',
-            distance: '',
-            duration: '',
-            carbon: '2',
+            distance: null,
+            duration: null,
+            carbon: null,
         }
     ]);
 
@@ -370,12 +349,13 @@ export default function Maps() {
             ];
 
             update.map((value) => {
-                value.distance = availableDistances[value.type]
-                value.duration = availableDuration[value.type]
+                value.distance = routesDistances[value.type]
+                value.duration = routesDuration[value.type]
             })
+            console.log(update)
             return update;
         })
-    }, [availableDistances, availableDuration]);
+    }, [routesDistances, routesDuration]);
 
     return (
     <div className="bg-gray-400 flex h-screen justify-center">
@@ -474,65 +454,7 @@ export default function Maps() {
         </Transition>
         <div className="fixed inset-0 z-40 left-auto" >
             <div className="hidden md:block w-full max-w-md px-2 py-16 sm:px-0">
-                <Tab.Group>
-                    <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
-                    {categories.map((category) => (
-                        <Tab
-                        key={category}
-                        className={({ selected }) =>
-                            classNames(
-                            'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700',
-                            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-                            selected
-                                ? 'bg-white shadow'
-                                : 'text-blue-100 hover:bg-white/[0.12] hover:text-white'
-                            )
-                        }
-                        >
-                        {category}
-                        </Tab>
-                    ))}
-                    </Tab.List>
-                    <Tab.Panels className="mt-2">
-                        {categories.map((posts, idx) => (
-                            <Tab.Panel
-                            key={idx}
-                            className={classNames(
-                                'rounded-xl bg-white p-3',
-                                'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
-                            )}
-                            >
-                            <ul>
-                                {sidebarData.map((post) => (
-                                <li
-                                    key={post.id}
-                                    className="relative rounded-md p-3 hover:bg-gray-100"
-                                >
-                                    <h3 className="text-sm font-medium leading-5">
-                                    {post.title}
-                                    </h3>
-                                    <ul className="mt-1 flex space-x-1 text-xs font-normal leading-4 text-gray-500">
-                                    <li>{post.distance}</li>
-                                    <li>&middot;</li>
-                                    <li>{post.duration}</li>
-                                    <li>&middot;</li>
-                                    {/* <li>{post.shareCount}</li> */}
-                                    </ul>
-
-                                    <a
-                                    href="#"
-                                    className={classNames(
-                                        'absolute inset-0 rounded-md',
-                                        'ring-blue-400 focus:z-10 focus:outline-none focus:ring-2'
-                                    )}
-                                    />
-                                </li>
-                                ))}
-                            </ul>
-                        </Tab.Panel>
-                    ))}
-                    </Tab.Panels>
-                </Tab.Group>
+                <Sidebar sidebarData={sidebarData}/> 
             </div>
             {/* <div className="fixed inset-0 bg-gray-600 bg-opacity-0"></div> */}
         </div>
