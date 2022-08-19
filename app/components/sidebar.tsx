@@ -1,5 +1,6 @@
 import { Tab } from "@headlessui/react";
 import { useLoaderData } from "@remix-run/react";
+import { execPath } from "process";
 import { useState } from "react";
 import { NameValue, SidebarData } from "~/types/types";
 
@@ -13,8 +14,14 @@ type SidebarProps = {
 
 export default function Sidebar(props: SidebarProps) {
     const categories = [
-        'Fastest',
-        'Nicest'
+        {
+            id: 'Fastest',
+            comparator: 'durationSeconds',
+        },
+        {
+            id: 'Least Carbon Footprint',
+            comparator: 'carbonGrams'
+        }
     ];
 
     const parseDistance = (distanceMeters: number | undefined) : string => {
@@ -54,7 +61,7 @@ export default function Sidebar(props: SidebarProps) {
             <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
             {categories.map((category) => (
                 <Tab
-                key={category}
+                key={category.id}
                 className={({ selected }) =>
                     classNames(
                     'w-full rounded-lg py-2.5 text-sm font-medium leading-5 text-blue-700',
@@ -65,12 +72,12 @@ export default function Sidebar(props: SidebarProps) {
                     )
                 }
                 >
-                {category}
+                {category.id}
                 </Tab>
             ))}
             </Tab.List>
             <Tab.Panels className="mt-2">
-                {categories.map((posts, idx) => (
+                {categories.map((category, idx) => (
                     <Tab.Panel
                     key={idx}
                     className={classNames(
@@ -79,7 +86,15 @@ export default function Sidebar(props: SidebarProps) {
                     )}
                     >
                     <ul>
-                        {props.sidebarData.map((transport) => (
+                        {props.sidebarData.sort((a, b) => {
+                            if (category.comparator === 'durationSeconds') {
+                                return a.durationSeconds - b.durationSeconds
+                            } else if (category.comparator === 'carbonGrams') {
+                                return a.carbonGrams - b.carbonGrams
+                            } else {
+                                return 0; // in place
+                            }
+                            }).map((transport) => (
                         <li
                             key={transport.id}
                             className="relative rounded-md p-3 hover:bg-gray-100"
