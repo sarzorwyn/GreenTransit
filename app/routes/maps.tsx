@@ -5,7 +5,8 @@ import { Form, useLoaderData } from "@remix-run/react";
 import { Fragment, MutableRefObject, useEffect, useRef, useState } from "react";
 import { toGeoJSON } from '@mapbox/polyline';
 import mapboxgl from "mapbox-gl";
-import { NameValue, SidebarData } from "~/types/types";
+import { StatsData } from "~/types/StatsData";
+import { NameValue } from "~/types/NameValue";
 import StatsWindow from "~/components/stats-window";
 
 export async function loader({ request }: LoaderArgs) {
@@ -13,7 +14,7 @@ export async function loader({ request }: LoaderArgs) {
 }
 
 export const links: LinksFunction = () => {
-    return [{rel: 'stylesheet', href: 'https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css'}];
+    return [{rel: 'stylesheet', href: 'https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css', as:"fetch"}];
   };
 
 
@@ -38,7 +39,7 @@ type CarbonMultipliers = {
  * @returns the map and overlays
  */
 export default function Maps() {
-    let [isShowingTopMenu, setIsShowingTopMenu] = useState(true)
+    let [isShowingTopMenu, setIsShowingTopMenu] = useState(true);
 
     const apiKey = useLoaderData();
 
@@ -258,7 +259,6 @@ export default function Maps() {
 
         if (activeTravelType !== undefined) {
             setActiveRoute(availableRoutes[activeTravelType]);
-            console.log(activeRoute)
         }
     }, [activeTravelType, availableRoutes]);
 
@@ -316,7 +316,7 @@ export default function Maps() {
         }
     }
 
-    const [sidebarData, setSidebarData] = useState<SidebarData[]>([
+    const [sidebarData, setSidebarData] = useState<StatsData[]>([
         {
             id: 1,
             title: 'Driving',
@@ -344,8 +344,8 @@ export default function Maps() {
     ]);
 
     useEffect(() => {
-        setSidebarData((prevState: SidebarData[]): SidebarData[] => {
-            const update: SidebarData[] = [
+        setSidebarData((prevState: StatsData[]): StatsData[] => {
+            const update: StatsData[] = [
                 ...prevState,
             ];
 
@@ -354,7 +354,6 @@ export default function Maps() {
                 value.durationSeconds = routesDuration[value.type];
                 value.carbonGrams = (routesDistances[value.type] / 1000) * carbonMultipliers[value.type];
             })
-            console.log(update)
             return update;
         })
     }, [routesDistances, routesDuration]);
@@ -403,7 +402,7 @@ export default function Maps() {
                 leaveFrom="opacity-100 rotate-0 scale-100 "
                 leaveTo="opacity-0 scale-95 "
             >
-                <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
+                <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl sm:left-1 md:flex-row md:left-5 lg:left-20 xl:left-auto">
                     <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
                         <div className="md:mr-4">
                             <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
@@ -420,7 +419,13 @@ export default function Maps() {
                                 </Switch>
                                 
                             </label>
-                                <input autoComplete="street-address" className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
+                                <input autoComplete="street-address" 
+                                    className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                                    id="Start Point" 
+                                    type="text" 
+                                    placeholder="Enter start point" 
+                                    ref={startRef}
+                                />
                         </div>
                         <div className="">
                             <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
@@ -453,9 +458,9 @@ export default function Maps() {
                     </div>
                 </Form>
             </Transition>
-            <div className="absolute z-10 right-1" >
-                <div id="desktop-sidebar" className="hidden sm:block w-auto px-2 pt-16 sm:px-0">
-                    <StatsWindow sidebarData={sidebarData}/> 
+            <div className="absolute z-10 right-1 " >
+                <div id="desktop-sidebar" className="hidden sm:block w-auto px-2 pt-28 lg:pt-0 sm:px-0">
+                    <StatsWindow sidebarData={sidebarData} activeTravelType={activeTravelType} setActiveTravelType={setActiveTravelType}/> 
                 </div>
 
                 {/* <div id="mobile-sidebar" className="md:hidden w-auto max-w-md px-2 py-16 sm:px-0">

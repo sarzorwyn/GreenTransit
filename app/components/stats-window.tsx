@@ -1,17 +1,18 @@
-import { Tab } from "@headlessui/react";
-import { SidebarData } from "~/types/types";
+import { StatsData } from "~/types/StatsData";
 
 function classNames(...classes: string[]) {
     return classes.filter(Boolean).join(' ')
 }
 
-type SidebarProps = {
-    sidebarData: SidebarData[]
+type StatsWindowProps = {
+    sidebarData: StatsData[],
+    activeTravelType: string,
+    setActiveTravelType: React.Dispatch<React.SetStateAction<string>>,
 }
 
 
 
-export default function StatsWindow(props: SidebarProps) {
+export default function StatsWindow(props: StatsWindowProps) {
     const categories = [
         {
             id: 'Fastest',
@@ -75,12 +76,16 @@ export default function StatsWindow(props: SidebarProps) {
                             }).map((transport) => (
                                 <tr
                                     key={transport.id}
-                                    className="relative rounded-md p-4 hover:bg-gray-100 mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 pl-2 pr-3"
+                                    className={classNames(
+                                        `${props.activeTravelType === transport.type ? 'outline ring-blue-400 ring-2 z-10' : ''}`,
+                                        "relative rounded-md p-4 hover:bg-gray-100 mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 pl-2 pr-3"
+                                    )}
+                                    onClick={() => props.setActiveTravelType(transport.type)}
                                 >
-                                    <h3 className="text-sm font-medium leading-5 flex text-black items-center">
-                                        <img src={"/images/" + transport.type + ".png"} className="max-h-5 max-w-5"></img>
+                                    <td className="text-sm font-medium leading-5 flex text-black items-center">
+                                        <img src={"/images/" + transport.type + ".png"} className="max-h-5 max-w-5"  onError={(event) => (event.target as HTMLInputElement).style.display = 'none'}></img> 
                                         {transport.title}
-                                    </h3>
+                                    </td>
                                 
                                     <td>{parseDistance(transport.distanceMeters)}</td>
 
@@ -88,6 +93,7 @@ export default function StatsWindow(props: SidebarProps) {
 
                                     <td>{parseCarbon(transport.carbonGrams)}</td>
 
+                                    <td>
                                     <a
                                     href="#"
                                     className={classNames(
@@ -95,6 +101,7 @@ export default function StatsWindow(props: SidebarProps) {
                                         'ring-blue-400 focus:z-10 focus:outline-none focus:ring-2'
                                     )}
                                     />
+                                    </td>
                                 </tr>
                         ))}
                     </tbody>
