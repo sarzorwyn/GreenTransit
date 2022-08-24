@@ -1,5 +1,5 @@
 import { Tab } from "@headlessui/react";
-import { NameValue, SidebarData } from "~/types/types";
+import { SidebarData } from "~/types/types";
 
 function classNames(...classes: string[]) {
     return classes.filter(Boolean).join(' ')
@@ -57,7 +57,7 @@ export default function StatsWindow(props: SidebarProps) {
 
     return (
         <Tab.Group>
-            <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/20 p-1">
+            <Tab.List className="flex space-x-1 rounded-xl bg-blue-900/60 p-1">
             {categories.map((category) => (
                 <Tab
                 key={category.id}
@@ -85,7 +85,7 @@ export default function StatsWindow(props: SidebarProps) {
                     )}
                     >
 
-                    <table className="table-auto mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 text-center">
+                    <table className="table-fixed mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 text-center">
                         <thead className="text-sm font-medium leading-5 text-black font-['Alata']">
                             <tr>
                                 <th className="pl-1 pr-1">Transit Type</th>
