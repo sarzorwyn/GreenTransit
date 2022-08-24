@@ -1,7 +1,4 @@
 import { Tab } from "@headlessui/react";
-import { useLoaderData } from "@remix-run/react";
-import { execPath } from "process";
-import { useState } from "react";
 import { NameValue, SidebarData } from "~/types/types";
 
 function classNames(...classes: string[]) {
@@ -12,7 +9,9 @@ type SidebarProps = {
     sidebarData: SidebarData[]
 }
 
-export default function Sidebar(props: SidebarProps) {
+
+
+export default function StatsWindow(props: SidebarProps) {
     const categories = [
         {
             id: 'Fastest',
@@ -48,7 +47,7 @@ export default function Sidebar(props: SidebarProps) {
 
     const parseCarbon = (carbonGrams: number | undefined) : string => {
         if (carbonGrams == undefined || carbonGrams == 0) {
-            return '- kg CO2';
+            return '- kg';
         } else if (carbonGrams < 1) {
             return 'Negligible';
         } else {
@@ -85,41 +84,51 @@ export default function Sidebar(props: SidebarProps) {
                         'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
                     )}
                     >
-                    <ul>
-                        {props.sidebarData.sort((a, b) => {
-                            if (category.comparator === 'durationSeconds') {
-                                return a.durationSeconds - b.durationSeconds
-                            } else if (category.comparator === 'carbonGrams') {
-                                return a.carbonGrams - b.carbonGrams
-                            } else {
-                                return 0; // in place
-                            }
-                            }).map((transport) => (
-                        <li
-                            key={transport.id}
-                            className="relative rounded-md p-3 hover:bg-gray-100"
-                        >
-                            <h3 className="text-sm font-medium leading-5">
-                            {transport.title}
-                            </h3>
-                            <ul className="mt-1 flex space-x-1 text-xs font-normal leading-4 text-gray-500">
-                            <li>{parseDistance(transport.distanceMeters)}</li>
-                            <li>&middot;</li>
-                            <li>{parseDuration(transport.durationSeconds)}</li>
-                            <li>&middot;</li>
-                            <li>{parseCarbon(transport.carbonGrams)}</li>
-                            </ul>
 
-                            <a
-                            href="#"
-                            className={classNames(
-                                'absolute inset-0 rounded-md',
-                                'ring-blue-400 focus:z-10 focus:outline-none focus:ring-2'
-                            )}
-                            />
-                        </li>
-                        ))}
-                    </ul>
+                    <table className="table-auto mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 text-center">
+                        <thead className="text-sm font-medium leading-5 text-black font-['Alata']">
+                            <tr>
+                                <th className="pl-1 pr-1">Transit Type</th>
+                                <th className="pl-1 pr-1">Distance</th>
+                                <th className="pl-1 pr-1">Duration</th>
+                                <th className="pl-1 pr-1">CO<sub>2</sub></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {props.sidebarData.sort((a, b) => { 
+                                if (category.comparator === 'durationSeconds') {
+                                    return a.durationSeconds - b.durationSeconds
+                                } else if (category.comparator === 'carbonGrams') {
+                                    return a.carbonGrams - b.carbonGrams
+                                } else {
+                                    return 0; // in place
+                                }
+                                }).map((transport) => (
+                                    <tr
+                                        key={transport.id}
+                                        className="relative rounded-md p-4 hover:bg-gray-100 mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 pl-2 pr-3"
+                                    >
+                                        <h3 className="text-sm font-medium leading-5 text-black">
+                                            {transport.title}
+                                        </h3>
+                                    
+                                        <td>{parseDistance(transport.distanceMeters)}</td>
+
+                                        <td>{parseDuration(transport.durationSeconds)}</td>
+
+                                        <td>{parseCarbon(transport.carbonGrams)}</td>
+
+                                        <a
+                                        href="#"
+                                        className={classNames(
+                                            'absolute inset-0 rounded-md',
+                                            'ring-blue-400 focus:z-10 focus:outline-none focus:ring-2'
+                                        )}
+                                        />
+                                    </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </Tab.Panel>
             ))}
             </Tab.Panels>

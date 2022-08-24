@@ -1,20 +1,21 @@
-import { Switch, Tab, Transition } from "@headlessui/react";
+import { Switch, Transition } from "@headlessui/react";
 import Map, { Layer, MapRef, Source } from 'react-map-gl';
-import { LoaderArgs } from "@remix-run/node";
+import { LinksFunction, LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
-import { Fragment, MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, MutableRefObject, useEffect, useRef, useState } from "react";
 import { toGeoJSON } from '@mapbox/polyline';
 import mapboxgl from "mapbox-gl";
 import { NameValue, SidebarData } from "~/types/types";
-import Sidebar from "~/components/sidebar";
-
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import StatsWindow from "~/components/stats-window";
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
 }
+
+export const links: LinksFunction = () => {
+    return [{rel: 'stylesheet', href: 'https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css'}];
+  };
+
 
 type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
 export const libraries:Libraries = ['places']
@@ -82,7 +83,7 @@ export default function Maps() {
             startMarker.current = new mapboxgl.Marker({color: "#20ba44"})
             endMarker.current = new mapboxgl.Marker({color: "#972FFE"})
         }
-    }, [mapboxMapRef.current?.loaded])
+    }, [mapboxMapRef.current?.loaded]);
 
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
@@ -349,9 +350,9 @@ export default function Maps() {
             ];
 
             update.map((value) => {
-                value.distanceMeters = routesDistances[value.type]
-                value.durationSeconds = routesDuration[value.type]
-                value.carbonGrams = (routesDistances[value.type] / 1000) * carbonMultipliers[value.type]
+                value.distanceMeters = routesDistances[value.type];
+                value.durationSeconds = routesDuration[value.type];
+                value.carbonGrams = (routesDistances[value.type] / 1000) * carbonMultipliers[value.type];
             })
             console.log(update)
             return update;
@@ -359,106 +360,108 @@ export default function Maps() {
     }, [routesDistances, routesDuration]);
 
     return (
-    <div className="bg-gray-400 flex h-screen justify-center">
-        <div className="w-full h-full z-0">
-            <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css' rel='stylesheet' />
+        <div className="bg-gray-400 flex h-screen justify-center">
+            <div className="w-full h-full z-0">
 
-            <Map
-                initialViewState={{
-                    bounds: [lowerLng, lowerLat, upperLng, upperLat],
-                    zoom: 14
-                }}
-                mapboxAccessToken={apiKey}
-                renderWorldCopies={false}
-                boxZoom={false}
-                minZoom={8}
-                logoPosition={'bottom-left'}
-                attributionControl={false}
-                pitchWithRotate={false}
-                dragRotate={true}
-                touchPitch={false}
-                onClick={mapClick}
-                ref={mapboxMapRef}
-                reuseMaps={true}
+                <Map
+                    initialViewState={{
+                        bounds: [lowerLng, lowerLat, upperLng, upperLat],
+                        zoom: 14
+                    }}
+                    mapboxAccessToken={apiKey}
+                    renderWorldCopies={false}
+                    boxZoom={false}
+                    minZoom={8}
+                    logoPosition={'bottom-left'}
+                    attributionControl={false}
+                    pitchWithRotate={false}
+                    dragRotate={true}
+                    touchPitch={false}
+                    onClick={mapClick}
+                    ref={mapboxMapRef}
+                    reuseMaps={true}
 
-                style={{display: "flex absolute"}}
-                mapStyle="mapbox://styles/mapbox/dark-v10"
-            >
-                <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
-                    <Layer {...inactiveRoutesLayer} />
-                </Source>
-                <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
-                    <Layer  {...activeRoutesLayer} />
-                </Source>
-            </Map>
-        </div>
-        <Transition
-            appear={true}
-            as={Fragment}
-            show={isShowingTopMenu}
-            enter="transform duration-200 transition ease-in-out"
-            enterFrom="opacity-0 scale-95"
-            enterTo="opacity-100 rotate-0 scale-100"
-            leave="transform duration-200 transition ease-in-out"
-            leaveFrom="opacity-100 rotate-0 scale-100 "
-            leaveTo="opacity-0 scale-95 "
-        >
-            <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
-                <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
-                    <div className="md:mr-4">
-                        <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
-                            Origin
-                            <Switch
-                                checked={markerSelector === 'startLocation'}
-                                onChange={() => markerSelector === 'startLocation' ? setMarkerSelector('') : setMarkerSelector('startLocation')} // toggle
-                                className='ml-auto mr-2'
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector === 'startLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                            </Switch>
-                            
-                        </label>
-                            <input autoComplete="street-address" className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
-                    </div>
-                    <div className="">
-                        <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
-                            Destination
-                            <Switch
-                                checked={markerSelector === 'endLocation'}
-                                onChange={() => markerSelector === 'endLocation' ? setMarkerSelector('') : setMarkerSelector('endLocation')} // toggle 
-                                className='ml-auto mr-2'
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector == 'endLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                            </Switch>
-                        </label>
-                            <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-                                id="End Point" 
-                                type="text" 
-                                placeholder="Enter end point" 
-                                ref={endRef}
-                            />
-                    </div>
-                </div>
-                <div className="flex items-center justify-between sm:flex-row">
-                    <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" 
-                        type="button" 
-                        onClick={calculateRoute}>
-                        Calculate
-                    </button>
-                </div>
-            </Form>
-        </Transition>
-        <div className="fixed inset-0 z-40 left-auto" >
-            <div className="hidden md:block w-full max-w-md px-2 py-16 sm:px-0">
-                <Sidebar sidebarData={sidebarData}/> 
+                    style={{display: "flex absolute"}}
+                    mapStyle="mapbox://styles/mapbox/dark-v10"
+                >
+                    <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
+                        <Layer {...inactiveRoutesLayer} />
+                    </Source>
+                    <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
+                        <Layer  {...activeRoutesLayer} />
+                    </Source>
+                </Map>
             </div>
-            {/* <div className="fixed inset-0 bg-gray-600 bg-opacity-0"></div> */}
+            <Transition
+                appear={true}
+                as={Fragment}
+                show={isShowingTopMenu}
+                enter="transform duration-200 transition ease-in-out"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 rotate-0 scale-100"
+                leave="transform duration-200 transition ease-in-out"
+                leaveFrom="opacity-100 rotate-0 scale-100 "
+                leaveTo="opacity-0 scale-95 "
+            >
+                <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
+                    <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
+                        <div className="md:mr-4">
+                            <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
+                                Origin
+                                <Switch
+                                    checked={markerSelector === 'startLocation'}
+                                    onChange={() => markerSelector === 'startLocation' ? setMarkerSelector('') : setMarkerSelector('startLocation')} // toggle
+                                    className='ml-auto mr-2'
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector === 'startLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </Switch>
+                                
+                            </label>
+                                <input autoComplete="street-address" className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
+                        </div>
+                        <div className="">
+                            <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
+                                Destination
+                                <Switch
+                                    checked={markerSelector === 'endLocation'}
+                                    onChange={() => markerSelector === 'endLocation' ? setMarkerSelector('') : setMarkerSelector('endLocation')} // toggle 
+                                    className='ml-auto mr-2'
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector == 'endLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </Switch>
+                            </label>
+                                <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                                    id="End Point" 
+                                    type="text" 
+                                    placeholder="Enter end point" 
+                                    ref={endRef}
+                                />
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between sm:flex-row">
+                        <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" 
+                            type="button" 
+                            onClick={calculateRoute}>
+                            Calculate
+                        </button>
+                    </div>
+                </Form>
+            </Transition>
+            <div className="h-fit z-10 left-auto bg-red-300" >
+                <div id="desktop-sidebar" className="hidden sm:block w-72 max-w-md px-2 py-16 sm:px-0">
+                    <StatsWindow sidebarData={sidebarData}/> 
+                </div>
+
+                <div id="mobile-sidebar" className="hidden w-auto max-w-md px-2 py-16 sm:px-0">
+                    <StatsWindow sidebarData={sidebarData}/> 
+                </div>
+            </div>
         </div>
-    </div>
     );
 }
