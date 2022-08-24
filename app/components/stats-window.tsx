@@ -80,7 +80,7 @@ export default function StatsWindow(props: SidebarProps) {
                     <Tab.Panel
                     key={idx}
                     className={classNames(
-                        'rounded-xl bg-white p-3',
+                        'rounded-xl bg-gray-200 p-3',
                         'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
                     )}
                     >
@@ -88,10 +88,10 @@ export default function StatsWindow(props: SidebarProps) {
                     <table className="table-fixed mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 text-center">
                         <thead className="text-sm font-medium leading-5 text-black font-['Alata']">
                             <tr>
-                                <th className="pl-1 pr-1">Transit Type</th>
+                                <th className="pl-1 pr-2 whitespace-nowrap">Transit Type</th>
                                 <th className="pl-1 pr-1">Distance</th>
                                 <th className="pl-1 pr-1">Duration</th>
-                                <th className="pl-1 pr-1">CO<sub>2</sub></th>
+                                <th className="pl-4 pr-4">CO<sub>2</sub></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -108,7 +108,8 @@ export default function StatsWindow(props: SidebarProps) {
                                         key={transport.id}
                                         className="relative rounded-md p-4 hover:bg-gray-100 mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 pl-2 pr-3"
                                     >
-                                        <h3 className="text-sm font-medium leading-5 text-black">
+                                        <h3 className="text-sm font-medium leading-5 flex text-black items-center">
+                                            <img src={"/images/" + transport.type + ".png"} className="max-h-5 max-w-5"></img>
                                             {transport.title}
                                         </h3>
                                     
