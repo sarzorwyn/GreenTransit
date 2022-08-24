@@ -453,8 +453,8 @@ export default function Maps() {
                     </div>
                 </Form>
             </Transition>
-            <div className="absolute z-10 right-0" >
-                <div id="desktop-sidebar" className="hidden sm:block w-72 px-2 pt-16 sm:px-0">
+            <div className="absolute z-10 right-1" >
+                <div id="desktop-sidebar" className="hidden sm:block w-auto px-2 pt-16 sm:px-0">
                     <StatsWindow sidebarData={sidebarData}/> 
                 </div>
 
