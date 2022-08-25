@@ -222,6 +222,7 @@ export default function Maps() {
                 }
                 ],
                 overview: "full",
+                exclude: "ferry"
             })
             .send()
             .then((response: any) => {

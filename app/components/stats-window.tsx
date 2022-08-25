@@ -61,8 +61,8 @@ export default function StatsWindow(props: StatsWindowProps) {
             'rounded-xl bg-gray-200 p-4',
             'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2'
         )}>
-                <table className="table-fixed mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 text-center">
-                    <thead className="text-sm font-medium leading-5 text-black font-['Alata']">
+                <table className="table-fixed mt-1 space-x-1 text-lg font-normal leading-4 text-gray-500 text-center">
+                    <thead className="text-lg font-medium leading-5 text-black font-['Alata']">
                         <tr>
                             <th className="pl-1 pr-2 whitespace-nowrap">Transit Type</th>
                             <th className="pl-1 pr-1">Distance</th>
@@ -78,11 +78,11 @@ export default function StatsWindow(props: StatsWindowProps) {
                                     key={transport.id}
                                     className={classNames(
                                         `${props.activeTravelType === transport.type ? 'outline ring-blue-400 ring-2 z-10' : ''}`,
-                                        "relative rounded-md p-4 hover:bg-gray-100 mt-1 space-x-1 text-xs font-normal leading-4 text-gray-500 pl-2 pr-3"
+                                        "relative rounded-md py-4 hover:bg-gray-100 mt-1 space-x-1 text-xl font-normal leading-4 text-gray-500 pl-2 pr-3"
                                     )}
                                     onClick={() => props.setActiveTravelType(transport.type)}
                                 >
-                                    <td className="text-sm font-medium leading-5 flex text-black items-center">
+                                    <td className="text-base font-medium leading-5 flex text-black items-center">
                                         <img src={"/images/" + transport.type + ".png"} className="max-h-5 max-w-5"  onError={(event) => (event.target as HTMLInputElement).style.display = 'none'}></img> 
                                         {transport.title}
                                     </td>
