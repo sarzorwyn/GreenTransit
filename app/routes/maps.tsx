@@ -1,24 +1,36 @@
-import { Switch } from "@headlessui/react";
+import { Switch, Transition } from "@headlessui/react";
 import Map, { Layer, MapRef, Source } from 'react-map-gl';
-import { LoaderArgs } from "@remix-run/node";
+import { LinksFunction, LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
-import { MutableRefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, MutableRefObject, useEffect, useRef, useState } from "react";
 import { toGeoJSON } from '@mapbox/polyline';
 import mapboxgl from "mapbox-gl";
+import { StatsData } from "~/types/StatsData";
+import { NameValue } from "~/types/NameValue";
+import StatsWindow from "~/components/stats-window";
+import { TransitTypes } from "~/types/TransitTypes";
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
 }
 
-declare type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
+export const links: LinksFunction = () => {
+    return [{rel: 'stylesheet', href: 'https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css', as:"fetch"}];
+  };
+
+
+type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
 export const libraries:Libraries = ['places']
 
-declare type Routes = {
+type Routes = {
     [index: string]: GeoJSON.Feature,
 }
 
-declare type NameValue = {
-    [index: string]: string,
+type CarbonMultipliers = {
+    'driving-traffic': number,
+    'cycling': number,
+    'walking': number,
+    'public-transport': number,
 }
 
 /**
@@ -28,6 +40,8 @@ declare type NameValue = {
  * @returns the map and overlays
  */
 export default function Maps() {
+    let [isShowingTopMenu, setIsShowingTopMenu] = useState(true);
+
     const apiKey = useLoaderData();
 
     const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
@@ -39,12 +53,18 @@ export default function Maps() {
         geometries: 'geojson',
         controls: { instructions: false },
         flyTo: true,
-    })
+    });
     const geocodingClient = new MapboxGeocoderSDK({
         accessToken: apiKey
-    })
+    });
 
-    const travelTypes: string[] = ['driving-traffic', 'walking', 'cycling'];
+    const travelTypes: TransitTypes[] = ['driving-traffic', 'walking', 'cycling'];
+    const carbonMultipliers: CarbonMultipliers = {
+        'driving-traffic': 271, // single person
+        'cycling': 5, // manufacturing emissions
+        'walking': 0.0005, // manufacturing shoes + disposal 0.3kgCO2, 600km lifespan
+        'public-transport': 0, // TODO: get a coefficient
+    }
     const lowerLat = 1.2;
     const upperLat = 1.48;
     const lowerLng = 103.59;
@@ -65,10 +85,7 @@ export default function Maps() {
             startMarker.current = new mapboxgl.Marker({color: "#20ba44"})
             endMarker.current = new mapboxgl.Marker({color: "#972FFE"})
         }
-    }, [mapboxMapRef.current?.loaded])
-
-    const [displayDistance, setDisplayDistance] = useState<string>('');
-    const [displayDuration, setDisplayDuration] = useState<string>('');
+    }, [mapboxMapRef.current?.loaded]);
 
     const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
@@ -93,16 +110,22 @@ export default function Maps() {
         'cycling': placeholderFeature,
         'walking': placeholderFeature,
     });
-    const [availableDistances, setAvailableDistances] = useState<NameValue>({
-        'driving-traffic': '',
-        'cycling': '',
-        'walking': '',
+    const [routesDistances, setRoutesDistances] = useState<NameValue>({
+        'driving-traffic': 0,
+        'cycling': 0,
+        'walking': 0,
     });
-    const [availableDuration, setAvailableDuration] = useState<NameValue>({
-        'driving-traffic': '',
-        'cycling': '',
-        'walking': '',
+    const [routesDuration, setRoutesDuration] = useState<NameValue>({
+        'driving-traffic': 0,
+        'cycling': 0,
+        'walking': 0,
     });
+    const [routesCarbon, setRoutesCarbon] = useState<NameValue>({
+        'driving-traffic': 0,
+        'cycling': 0,
+        'walking': 0,
+    });
+
 
     const activeRoutesLayer: mapboxgl.LineLayer = {
         id: 'routes-active',
@@ -127,7 +150,7 @@ export default function Maps() {
             1,
             ['boolean', ['feature-state', 'fadein'], false],
             0.07,
-            0.5, // default
+            0.9, // default
           ],
           'line-width': [
             'interpolate',
@@ -182,28 +205,6 @@ export default function Maps() {
         },
       }
 
-    const parseDistance = (distance: number | undefined) : string => {
-        if (distance == undefined) {
-            return ''
-        } else if (distance < 1000) {
-            return distance.toFixed(0) + ' m';
-        } else {
-            return (distance / 1000).toFixed(1) + ' km'
-        }
-    }
-
-    const parseDuration = (duration: number | undefined) : string => {
-        if (duration == undefined) {
-            return ''
-        } else if (duration < 60) {
-            return 1 + ' min';
-        } else if (duration < 3600) {
-            return (duration / 60).toFixed(0) + ' mins'
-        } else {
-            return (duration / 3600).toFixed(0) + ' h ' + ((duration % 3600) / 60).toFixed(0) + ' mins'
-        }
-    }
-
     const calculateRoute = async () => {
         if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
             return;
@@ -214,8 +215,9 @@ export default function Maps() {
         const newRoutes: Routes = {};
         const newDistances: NameValue = {};
         const newDuration: NameValue = {};
+        const newCarbon: NameValue = {};
 
-        await Promise.all(travelTypes.map((travelType) => 
+        await Promise.all(travelTypes.map((travelType: TransitTypes) => 
             directionService.getDirections({
                 profile: travelType,
                 waypoints: [
@@ -227,26 +229,28 @@ export default function Maps() {
                 }
                 ],
                 overview: "full",
+                exclude: "ferry"
             })
             .send()
             .then((response: any) => {
-                const geoJsonFormat = toGeoJSON(response.body.routes[0].geometry);
-                console.log(response.body);
-                console.log(geoJsonFormat);
+                const geometry = toGeoJSON(response.body.routes[0].geometry);
                 
                 newRoutes[travelType] = {    
                     type: "Feature",
-                geometry: geoJsonFormat,
-                properties: null};
-                newDistances[travelType] = parseDistance(response.body.routes[0].distance);
-                newDuration[travelType] = parseDuration(response.body.routes[0].duration);
+                    geometry: geometry,
+                    properties: null
+                };
+                newDistances[travelType] = response.body.routes[0].distance;
+                newDuration[travelType] = response.body.routes[0].duration;
+                newCarbon[travelType] = (response.body.routes[0].duration  / 1000) * carbonMultipliers[travelType]; // TODO: refine the carbon calculation
             }))
+            // TODO: catch direction errors
         );
         
         setAvailableRoutes(newRoutes);
-        setAvailableDistances(newDistances);
-        setAvailableDuration(newDuration);
-        console.log(newRoutes)
+        setRoutesDistances(newDistances);
+        setRoutesDuration(newDuration);
+        setRoutesCarbon(newCarbon);
     }
 
     // Set the feature to be displayed in color
@@ -266,15 +270,8 @@ export default function Maps() {
 
         if (activeTravelType !== undefined) {
             setActiveRoute(availableRoutes[activeTravelType]);
-            console.log(activeRoute)
         }
     }, [activeTravelType, availableRoutes]);
-
-    // Set active distance and duration displayed
-    useEffect(() => {
-        setDisplayDistance(availableDistances[activeTravelType]);
-        setDisplayDuration(availableDuration[activeTravelType]);
-    }, [activeTravelType, availableDistances, availableDuration]);
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
         if (marker.current !== undefined && latLng !== null) {
@@ -328,88 +325,176 @@ export default function Maps() {
         } else if (e.features != undefined) {
             console.log(e.features)
         }
-
     }
 
+    const [sidebarData, setSidebarData] = useState<StatsData[]>([
+        {
+            id: 1,
+            title: 'Driving',
+            type: 'driving-traffic',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        },
+        {
+            id: 2,
+            title: 'Cycling',
+            type: 'cycling',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        },
+        {
+            id: 3,
+            title: 'Walking',
+            type: 'walking',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        }
+    ]);
+
+    useEffect(() => {
+        setSidebarData((prevState: StatsData[]): StatsData[] => {
+            const update: StatsData[] = [
+                ...prevState,
+            ];
+
+            const sortedDistance = Object.keys(routesDistances).sort((a, b) => {
+                return routesDistances[a] - routesDistances[b];
+            });
+
+            const sortedDuration = Object.keys(routesDuration).sort((a, b) => {
+                return routesDuration[a] - routesDuration[b];
+            });
+
+            const sortedCarbon = Object.keys(routesCarbon).sort((a, b) => {
+                return routesCarbon[a] - routesCarbon[b];
+            });
+
+            update.map((value) => {
+                value.distanceMeters = routesDistances[value.type];
+                value.durationSeconds = routesDuration[value.type];
+                value.carbonGrams = routesCarbon[value.type];
+                value.distanceRank = sortedDistance.indexOf(value.type);
+                value.durationRank = sortedDuration.indexOf(value.type);
+                value.carbonRank = sortedCarbon.indexOf(value.type);
+            })
+            return update;
+        })
+
+        console.log(sidebarData);
+    }, [routesDistances, routesDuration]);
+
     return (
-    <div className="bg-gray-400 flex h-screen justify-center">
-        <div className="w-full h-full z-0">
-            <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css' rel='stylesheet' />
+        <div className="bg-gray-400 flex h-screen justify-center">
+            <div className="w-full h-full z-0">
 
-            <Map
-                initialViewState={{
-                    bounds: [lowerLng, lowerLat, upperLng, upperLat],
-                    zoom: 14
-                }}
-                mapboxAccessToken={apiKey}
-                renderWorldCopies={false}
-                boxZoom={false}
-                minZoom={8}
-                logoPosition={'bottom-left'}
-                attributionControl={false}
-                pitchWithRotate={false}
-                dragRotate={true}
-                touchPitch={false}
-                onClick={mapClick}
-                ref={mapboxMapRef}
-                reuseMaps={true}
+                <Map
+                    initialViewState={{
+                        bounds: [lowerLng, lowerLat, upperLng, upperLat],
+                        zoom: 14
+                    }}
+                    mapboxAccessToken={apiKey}
+                    renderWorldCopies={false}
+                    boxZoom={false}
+                    minZoom={8}
+                    logoPosition={'bottom-left'}
+                    attributionControl={false}
+                    pitchWithRotate={false}
+                    dragRotate={true}
+                    touchPitch={false}
+                    onClick={mapClick}
+                    ref={mapboxMapRef}
+                    reuseMaps={true}
 
-                style={{display: "flex absolute"}}
-                mapStyle="mapbox://styles/mapbox/dark-v10"
+                    style={{display: "flex absolute"}}
+                    mapStyle="mapbox://styles/mapbox/dark-v10"
+                >
+                    <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
+                        <Layer {...inactiveRoutesLayer} />
+                    </Source>
+                    <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
+                        <Layer  {...activeRoutesLayer} />
+                    </Source>
+                </Map>
+            </div>
+            <Transition
+                appear={true}
+                as={Fragment}
+                show={isShowingTopMenu}
+                enter="transform duration-200 transition ease-in-out"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 rotate-0 scale-100"
+                leave="transform duration-200 transition ease-in-out"
+                leaveFrom="opacity-100 rotate-0 scale-100 "
+                leaveTo="opacity-0 scale-95 "
             >
-                <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
-                    <Layer  {...activeRoutesLayer} />
-                </Source>
-                <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
-                    <Layer {...inactiveRoutesLayer} />
-                </Source>
-            </Map>
+                <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl sm:left-1 md:flex-row md:left-5 lg:left-1/4 xl:left-auto">
+                    <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
+                        <div className="md:mr-4">
+                            <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
+                                Origin
+                                <Switch
+                                    checked={markerSelector === 'startLocation'}
+                                    onChange={() => markerSelector === 'startLocation' ? setMarkerSelector('') : setMarkerSelector('startLocation')} // toggle
+                                    className='ml-auto mr-2'
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector === 'startLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </Switch>
+                                
+                            </label>
+                                <input autoComplete="street-address" 
+                                    className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                                    id="Start Point" 
+                                    type="text" 
+                                    placeholder="Enter start point" 
+                                    ref={startRef}
+                                />
+                        </div>
+                        <div className="">
+                            <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
+                                Destination
+                                <Switch
+                                    checked={markerSelector === 'endLocation'}
+                                    onChange={() => markerSelector === 'endLocation' ? setMarkerSelector('') : setMarkerSelector('endLocation')} // toggle 
+                                    className='ml-auto mr-2'
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector == 'endLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </Switch>
+                            </label>
+                                <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                                    id="End Point" 
+                                    type="text" 
+                                    placeholder="Enter end point" 
+                                    ref={endRef}
+                                />
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between sm:flex-row">
+                        <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" 
+                            type="button" 
+                            onClick={calculateRoute}>
+                            Calculate
+                        </button>
+                    </div>
+                </Form>
+            </Transition>
+            <div>
+                <div id="desktop-sidebar" className="absolute z-10 right-1 top-28 hidden sm:block w-auto px-2 sm:px-0">
+                    <StatsWindow sidebarData={sidebarData} activeTravelType={activeTravelType} setActiveTravelType={setActiveTravelType}/> 
+                </div>
+
+                {/* <div id="mobile-sidebar" className="md:hidden w-auto max-w-md px-2 py-16 sm:px-0">
+                    <StatsWindow sidebarData={sidebarData}/> 
+                </div> */}
+            </div>
         </div>
-        <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:flex-row sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl">
-            <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
-                <div className="md:mr-4">
-                    <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
-                        Origin
-                        <Switch
-                            checked={markerSelector === 'startLocation'}
-                            onChange={() => markerSelector === 'startLocation' ? setMarkerSelector('') : setMarkerSelector('startLocation')} // toggle
-                            className='ml-auto mr-2'
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector === 'startLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                        </Switch>
-                        
-                    </label>
-                        <input autoComplete="street-address" className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="Start Point" type="text" placeholder="Enter start point" ref={startRef}/>
-                </div>
-                <div className="">
-                    <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
-                        Destination
-                        <Switch
-                            checked={markerSelector === 'endLocation'}
-                            onChange={() => markerSelector === 'endLocation' ? setMarkerSelector('') : setMarkerSelector('endLocation')} // toggle 
-                            className='ml-auto mr-2'
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`${markerSelector == 'endLocation' ? 'outline-double fill-slate-500' : ''} h-5 w-5 outline-1 outline-black hover:outline-double hover:fill-slate-500`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                        </Switch>
-                    </label>
-                        <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="End Point" type="text" placeholder="Enter end point" ref={endRef}/>
-                </div>
-            </div>
-            <div className="flex items-center justify-between sm:flex-row">
-                <span className="sm:ml-5">
-                    {"distance: " + `${displayDistance !== '' ? displayDistance : ''}`}
-                </span>
-                <button className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-2 mb-2 ml-auto sm:mr-4 rounded focus:outline-none focus:shadow-outline" type="button" onClick={calculateRoute}>
-                    Calculate
-                </button>
-            </div>
-        </Form>
-    </div>
     );
 }
