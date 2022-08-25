@@ -16,7 +16,8 @@ export const links: LinksFunction = () => {
   return [
     { rel: "stylesheet", href: tailwindStylesheetUrl },
     { rel: "preconnect",  href: "https://fonts.gstatic.com", as: 'style'},
-    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Alata&display=swap", as: 'style'}
+    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Alata&display=swap", as: 'font'},
+    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Maven+Pro:wght@500&display=swap", as: 'font'}
 ];
 };
 

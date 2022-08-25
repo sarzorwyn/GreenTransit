@@ -8,6 +8,7 @@ import mapboxgl from "mapbox-gl";
 import { StatsData } from "~/types/StatsData";
 import { NameValue } from "~/types/NameValue";
 import StatsWindow from "~/components/stats-window";
+import { TransitTypes } from "~/types/TransitTypes";
 
 export async function loader({ request }: LoaderArgs) {
     return process.env.MAPBOX_API_KEY;
@@ -57,7 +58,7 @@ export default function Maps() {
         accessToken: apiKey
     });
 
-    const travelTypes: string[] = ['driving-traffic', 'walking', 'cycling'];
+    const travelTypes: TransitTypes[] = ['driving-traffic', 'walking', 'cycling'];
     const carbonMultipliers: CarbonMultipliers = {
         'driving-traffic': 271, // single person
         'cycling': 5, // manufacturing emissions
@@ -115,6 +116,11 @@ export default function Maps() {
         'walking': 0,
     });
     const [routesDuration, setRoutesDuration] = useState<NameValue>({
+        'driving-traffic': 0,
+        'cycling': 0,
+        'walking': 0,
+    });
+    const [routesCarbon, setRoutesCarbon] = useState<NameValue>({
         'driving-traffic': 0,
         'cycling': 0,
         'walking': 0,
@@ -209,8 +215,9 @@ export default function Maps() {
         const newRoutes: Routes = {};
         const newDistances: NameValue = {};
         const newDuration: NameValue = {};
+        const newCarbon: NameValue = {};
 
-        await Promise.all(travelTypes.map((travelType) => 
+        await Promise.all(travelTypes.map((travelType: TransitTypes) => 
             directionService.getDirections({
                 profile: travelType,
                 waypoints: [
@@ -235,12 +242,15 @@ export default function Maps() {
                 };
                 newDistances[travelType] = response.body.routes[0].distance;
                 newDuration[travelType] = response.body.routes[0].duration;
+                newCarbon[travelType] = (response.body.routes[0].duration  / 1000) * carbonMultipliers[travelType]; // TODO: refine the carbon calculation
             }))
+            // TODO: catch direction errors
         );
         
         setAvailableRoutes(newRoutes);
         setRoutesDistances(newDistances);
         setRoutesDuration(newDuration);
+        setRoutesCarbon(newCarbon);
     }
 
     // Set the feature to be displayed in color
@@ -350,13 +360,30 @@ export default function Maps() {
                 ...prevState,
             ];
 
+            const sortedDistance = Object.keys(routesDistances).sort((a, b) => {
+                return routesDistances[a] - routesDistances[b];
+            });
+
+            const sortedDuration = Object.keys(routesDuration).sort((a, b) => {
+                return routesDuration[a] - routesDuration[b];
+            });
+
+            const sortedCarbon = Object.keys(routesCarbon).sort((a, b) => {
+                return routesCarbon[a] - routesCarbon[b];
+            });
+
             update.map((value) => {
                 value.distanceMeters = routesDistances[value.type];
                 value.durationSeconds = routesDuration[value.type];
-                value.carbonGrams = (routesDistances[value.type] / 1000) * carbonMultipliers[value.type];
+                value.carbonGrams = routesCarbon[value.type];
+                value.distanceRank = sortedDistance.indexOf(value.type);
+                value.durationRank = sortedDuration.indexOf(value.type);
+                value.carbonRank = sortedCarbon.indexOf(value.type);
             })
             return update;
         })
+
+        console.log(sidebarData);
     }, [routesDistances, routesDuration]);
 
     return (
@@ -403,7 +430,7 @@ export default function Maps() {
                 leaveFrom="opacity-100 rotate-0 scale-100 "
                 leaveTo="opacity-0 scale-95 "
             >
-                <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl sm:left-1 md:flex-row md:left-5 lg:left-20 xl:left-auto">
+                <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl sm:left-1 md:flex-row md:left-5 lg:left-1/4 xl:left-auto">
                     <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
                         <div className="md:mr-4">
                             <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
@@ -459,8 +486,8 @@ export default function Maps() {
                     </div>
                 </Form>
             </Transition>
-            <div className="absolute z-10 right-1 " >
-                <div id="desktop-sidebar" className="hidden sm:block w-auto px-2 pt-28 lg:pt-0 sm:px-0">
+            <div>
+                <div id="desktop-sidebar" className="absolute z-10 right-1 top-28 hidden sm:block w-auto px-2 sm:px-0">
                     <StatsWindow sidebarData={sidebarData} activeTravelType={activeTravelType} setActiveTravelType={setActiveTravelType}/> 
                 </div>
 
