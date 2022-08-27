@@ -9,9 +9,10 @@ import { StatsData } from "~/types/StatsData";
 import { NameValue } from "~/types/NameValue";
 import StatsWindow from "~/components/stats-window";
 import { TransitTypes } from "~/types/TransitTypes";
+import { useLoadScript } from "@react-google-maps/api";
 
 export async function loader({ request }: LoaderArgs) {
-    return process.env.MAPBOX_API_KEY;
+    return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
 }
 
 export const links: LinksFunction = () => {
@@ -47,7 +48,7 @@ export default function Maps() {
     const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
     const MapboxDirectionsModule = require('@mapbox/mapbox-sdk/services/directions');
     const directionService = new MapboxDirectionsModule({
-        accessToken: apiKey,
+        accessToken: apiKey[0],
         unit: 'metric',
         alternatives: false,
         geometries: 'geojson',
@@ -55,7 +56,7 @@ export default function Maps() {
         flyTo: true,
     });
     const geocodingClient = new MapboxGeocoderSDK({
-        accessToken: apiKey
+        accessToken: apiKey[0],
     });
 
     const travelTypes: TransitTypes[] = ['driving-traffic', 'walking', 'cycling'];
@@ -63,7 +64,7 @@ export default function Maps() {
         'driving-traffic': 271, // single person
         'cycling': 5, // manufacturing emissions
         'walking': 0.0005, // manufacturing shoes + disposal 0.3kgCO2, 600km lifespan
-        'public-transport': 0, // TODO: get a coefficient
+        'public-transport': 200, // TODO: get a coefficient
     }
     const lowerLat = 1.2;
     const upperLat = 1.48;
@@ -80,10 +81,10 @@ export default function Maps() {
     // Set up map and marker after map is fully loaded
     useEffect(() => {
         if (mapboxMapRef != undefined && mapboxMapRef.current != null) {
-            setMapboxMap(mapboxMapRef.current.getMap())
+            setMapboxMap(mapboxMapRef.current.getMap());
 
-            startMarker.current = new mapboxgl.Marker({color: "#20ba44"})
-            endMarker.current = new mapboxgl.Marker({color: "#972FFE"})
+            startMarker.current = new mapboxgl.Marker({color: "#20ba44"});
+            endMarker.current = new mapboxgl.Marker({color: "#972FFE"});
         }
     }, [mapboxMapRef.current?.loaded]);
 
@@ -109,22 +110,62 @@ export default function Maps() {
         'driving-traffic': placeholderFeature,
         'cycling': placeholderFeature,
         'walking': placeholderFeature,
+        'public-transport': placeholderFeature,
     });
     const [routesDistances, setRoutesDistances] = useState<NameValue>({
         'driving-traffic': 0,
         'cycling': 0,
         'walking': 0,
+        'public-transport': 0,
     });
     const [routesDuration, setRoutesDuration] = useState<NameValue>({
         'driving-traffic': 0,
         'cycling': 0,
         'walking': 0,
+        'public-transport': 0,
     });
     const [routesCarbon, setRoutesCarbon] = useState<NameValue>({
         'driving-traffic': 0,
         'cycling': 0,
         'walking': 0,
+        'public-transport': 0,
     });
+
+    
+    const [sidebarData, setSidebarData] = useState<StatsData[]>([
+        {
+            id: 1,
+            title: 'Driving',
+            type: 'driving-traffic',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        },
+        {
+            id: 2,
+            title: 'Cycling',
+            type: 'cycling',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        },
+        {
+            id: 3,
+            title: 'Walking',
+            type: 'walking',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        },
+        {
+            id: 4,
+            title: 'Public Transit',
+            type: 'public-transport',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        }
+    ]);
 
 
     const activeRoutesLayer: mapboxgl.LineLayer = {
@@ -205,13 +246,72 @@ export default function Maps() {
         },
       }
 
+      useEffect(() => {
+        setSidebarData((prevState: StatsData[]): StatsData[] => { 
+            const update: StatsData[] = [
+                ...prevState,
+            ];
+
+            const sortedDistance = Object.keys(routesDistances).sort((a, b) => {
+                return routesDistances[a] - routesDistances[b];
+            });
+
+            const sortedDuration = Object.keys(routesDuration).sort((a, b) => {
+                return routesDuration[a] - routesDuration[b];
+            });
+
+            const sortedCarbon = Object.keys(routesCarbon).sort((a, b) => {
+                return routesCarbon[a] - routesCarbon[b];
+            });
+
+            update.map((value) => {
+                value.distanceMeters = routesDistances[value.type];
+                value.durationSeconds = routesDuration[value.type];
+                value.carbonGrams = routesCarbon[value.type];
+                value.distanceRank = sortedDistance.indexOf(value.type);
+                value.durationRank = sortedDuration.indexOf(value.type);
+                value.carbonRank = sortedCarbon.indexOf(value.type);
+            })
+            return update;
+        })
+    }, [routesDistances, routesDuration]);
+
+    // Set the feature to be displayed in color
+    useEffect(() => {
+        const features: GeoJSON.Feature[] = [];
+        travelTypes.forEach(travelType => {
+            if (travelType !== activeTravelType) {
+                features.push(availableRoutes[travelType]);
+            }
+        });
+
+        setInactiveRoutes({
+            type: "FeatureCollection",
+            features: features
+        });
+
+
+        if (activeTravelType !== undefined) {
+            setActiveRoute(availableRoutes[activeTravelType]);
+        }
+    }, [activeTravelType, availableRoutes]);
+
+    const { isLoaded } = useLoadScript({
+        googleMapsApiKey: apiKey[1],
+        libraries: libraries,
+    });
+
+    if (!isLoaded ) {
+        return <div/>;
+    }
+
+    const transitService = new google.maps.DirectionsService();
+
     const calculateRoute = async () => {
         if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
             return;
         }
 
-        // Public transport is not included here as mapbox does not support it natively
-        // TODO: add another api that calculates public transit time/ distance and display those data without directions due to TOS restrictions
         const newRoutes: Routes = {};
         const newDistances: NameValue = {};
         const newDuration: NameValue = {};
@@ -242,36 +342,27 @@ export default function Maps() {
                 };
                 newDistances[travelType] = response.body.routes[0].distance;
                 newDuration[travelType] = response.body.routes[0].duration;
-                newCarbon[travelType] = (response.body.routes[0].duration  / 1000) * carbonMultipliers[travelType]; // TODO: refine the carbon calculation
+                newCarbon[travelType] = (response.body.routes[0].distance  / 1000) * carbonMultipliers[travelType]; // TODO: refine the carbon calculation
             }))
             // TODO: catch direction errors
         );
-        
+
+        await transitService.route({
+            origin: startLngLat.lat + ', ' + startLngLat.lng,
+            destination: endLngLat.lat + ', ' + endLngLat.lng,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            avoidFerries: true
+        }).then((response: any) => {
+            console.log(response.routes[0])
+            newDistances['public-transport'] = response.routes[0].legs[0].distance.value;
+            newDuration['public-transport'] = response.routes[0].legs[0].duration.value;
+            newCarbon['public-transport'] = (response.routes[0].legs[0].distance.value  / 1000) * carbonMultipliers['public-transport']; // TODO: refine the carbon calculation
+        })
         setAvailableRoutes(newRoutes);
         setRoutesDistances(newDistances);
         setRoutesDuration(newDuration);
         setRoutesCarbon(newCarbon);
     }
-
-    // Set the feature to be displayed in color
-    useEffect(() => {
-        const features: GeoJSON.Feature[] = [];
-        travelTypes.forEach(travelType => {
-            if (travelType !== activeTravelType) {
-                features.push(availableRoutes[travelType]);
-            }
-        });
-
-        setInactiveRoutes({
-            type: "FeatureCollection",
-            features: features
-        });
-
-
-        if (activeTravelType !== undefined) {
-            setActiveRoute(availableRoutes[activeTravelType]);
-        }
-    }, [activeTravelType, availableRoutes]);
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
         if (marker.current !== undefined && latLng !== null) {
@@ -327,65 +418,6 @@ export default function Maps() {
         }
     }
 
-    const [sidebarData, setSidebarData] = useState<StatsData[]>([
-        {
-            id: 1,
-            title: 'Driving',
-            type: 'driving-traffic',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        },
-        {
-            id: 2,
-            title: 'Cycling',
-            type: 'cycling',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        },
-        {
-            id: 3,
-            title: 'Walking',
-            type: 'walking',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        }
-    ]);
-
-    useEffect(() => {
-        setSidebarData((prevState: StatsData[]): StatsData[] => {
-            const update: StatsData[] = [
-                ...prevState,
-            ];
-
-            const sortedDistance = Object.keys(routesDistances).sort((a, b) => {
-                return routesDistances[a] - routesDistances[b];
-            });
-
-            const sortedDuration = Object.keys(routesDuration).sort((a, b) => {
-                return routesDuration[a] - routesDuration[b];
-            });
-
-            const sortedCarbon = Object.keys(routesCarbon).sort((a, b) => {
-                return routesCarbon[a] - routesCarbon[b];
-            });
-
-            update.map((value) => {
-                value.distanceMeters = routesDistances[value.type];
-                value.durationSeconds = routesDuration[value.type];
-                value.carbonGrams = routesCarbon[value.type];
-                value.distanceRank = sortedDistance.indexOf(value.type);
-                value.durationRank = sortedDuration.indexOf(value.type);
-                value.carbonRank = sortedCarbon.indexOf(value.type);
-            })
-            return update;
-        })
-
-        console.log(sidebarData);
-    }, [routesDistances, routesDuration]);
-
     return (
         <div className="bg-gray-400 flex h-screen justify-center">
             <div className="w-full h-full z-0">
@@ -395,7 +427,7 @@ export default function Maps() {
                         bounds: [lowerLng, lowerLat, upperLng, upperLat],
                         zoom: 14
                     }}
-                    mapboxAccessToken={apiKey}
+                    mapboxAccessToken={apiKey[0]}
                     renderWorldCopies={false}
                     boxZoom={false}
                     minZoom={8}
