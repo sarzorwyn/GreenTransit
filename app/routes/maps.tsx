@@ -32,6 +32,8 @@ type CarbonMultipliers = {
     'cycling': number,
     'walking': number,
     'public-transport': number,
+    'bus': number,
+    'train': number,
 }
 
 /**
@@ -61,10 +63,12 @@ export default function Maps() {
 
     const travelTypes: TransitTypes[] = ['driving-traffic', 'walking', 'cycling'];
     const carbonMultipliers: CarbonMultipliers = {
-        'driving-traffic': 271, // single person
+        'driving-traffic': 271, // whole car (to check again)
         'cycling': 5, // manufacturing emissions
         'walking': 0.0005, // manufacturing shoes + disposal 0.3kgCO2, 600km lifespan
-        'public-transport': 200, // TODO: get a coefficient
+        'public-transport': 118, // Fall back on car numbers if unidentified 
+        'bus': 73, // per pax https://www.eco-business.com/news/singapores-mrt-lines-be-graded-green-ness/
+        'train': 13.2,
     }
     const lowerLat = 1.2;
     const upperLat = 1.48;
@@ -354,10 +358,33 @@ export default function Maps() {
             avoidFerries: true
         }).then((response: any) => {
             console.log(response.routes[0])
+
+            // Separate train, bus and walking distances for CO2 calc
+            let trainDist = 0;
+            let busDist = 0;
+            let walkDist = 0;
+            let miscDist = 0;
+
+            response.routes[0].legs[0].steps.map((step: any) => {
+                if (step.travel_mode === "WALKING") {
+                    walkDist += step.distance.value;
+                } else if (step.travel_mode === "TRANSIT" && step.transit.line.vehicle.type === "SUBWAY") {
+                    trainDist += step.distance.value;
+                } else if (step.travel_mode === "TRANSIT" && step.transit.line.vehicle.type === "BUS") {
+                    busDist += step.distance.value;
+                } else {
+                    miscDist += step.distance.value;
+                }
+            })
+
+            const totalCarbon = walkDist * carbonMultipliers['walking'] + trainDist * carbonMultipliers['train'] + busDist * carbonMultipliers['bus'] + miscDist * carbonMultipliers['public-transport'];
+            
             newDistances['public-transport'] = response.routes[0].legs[0].distance.value;
             newDuration['public-transport'] = response.routes[0].legs[0].duration.value;
-            newCarbon['public-transport'] = (response.routes[0].legs[0].distance.value  / 1000) * carbonMultipliers['public-transport']; // TODO: refine the carbon calculation
+            newCarbon['public-transport'] = (totalCarbon  / 1000); // Divide by 1000 because distance used was meters but multiplier is per km. 
         })
+        // TODO: catch direction errors
+
         setAvailableRoutes(newRoutes);
         setRoutesDistances(newDistances);
         setRoutesDuration(newDuration);
