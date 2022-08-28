@@ -66,7 +66,7 @@ export default function Maps() {
         'driving-traffic': 271, // whole car (to check again)
         'cycling': 5, // manufacturing emissions
         'walking': 0.0005, // manufacturing shoes + disposal 0.3kgCO2, 600km lifespan
-        'public-transport': 118, // Fall back on car numbers if unidentified 
+        'public-transport': 118, // Fall back if unidentified 
         'bus': 73, // per pax https://www.eco-business.com/news/singapores-mrt-lines-be-graded-green-ness/
         'train': 13.2,
     }
