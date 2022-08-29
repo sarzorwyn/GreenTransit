@@ -2,6 +2,7 @@ import mapboxgl from "mapbox-gl";
 import { Layer, Source } from "react-map-gl";
 import { greatCircle, lineDistance, midpoint, destination, bearing , distance, lineArc } from "@turf/turf"
 import { toWgs84, toMercator } from "@turf/projection"
+import { dottedGrayLayer } from "~/layers/dottedGrayLayer";
 
 type CurvedPolylineProps = {
     id: string,
@@ -43,40 +44,9 @@ export default function CurvedPolyline(props: CurvedPolylineProps) {
 
     const data: GeoJSON.Feature = toMercator(linearc);
 
-    const routesLayer: mapboxgl.LineLayer = {
-        id: props.id,
-        type: 'line',
-        layout: {
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#a0a0a0',
-          'line-dasharray': [2, 3],
-          'line-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            1,
-            ['boolean', ['feature-state', 'fadein'], false],
-            0.07,
-            0.5, // default
-          ],
-          'line-width': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            12,
-            5,
-            16,
-            13,
-            22,
-            25,
-          ],
-        },
-      }
-
     return (
         <Source id={props.id} type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={data}>
-            <Layer {...routesLayer} />
+            <Layer {...dottedGrayLayer} />
         </Source>
     )
 }

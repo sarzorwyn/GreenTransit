@@ -11,6 +11,8 @@ import StatsWindow from "~/components/stats-window";
 import { TransitTypes } from "~/types/TransitTypes";
 import { useLoadScript } from "@react-google-maps/api";
 import CurvedPolyline from "~/components/curved-polyline";
+import { solidGrayLayer } from "~/layers/solidGrayLayer";
+import { solidColoredLayer } from "~/layers/solidColoredLayer";
 
 export async function loader({ request }: LoaderArgs) {
     return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
@@ -171,85 +173,6 @@ export default function Maps() {
             carbonGrams: 0,
         }
     ]);
-
-
-    const activeRoutesLayer: mapboxgl.LineLayer = {
-        id: 'routes-active',
-        type: 'line',
-        layout: {
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#20ba44',
-          'line-gradient': [
-            'interpolate',
-            ['linear'],
-            ['line-progress'],
-            0,
-            '#20ba44',
-            1,
-            '#972FFE',
-          ],
-          'line-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            1,
-            ['boolean', ['feature-state', 'fadein'], false],
-            0.07,
-            0.9, // default
-          ],
-          'line-width': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            12,
-            5,
-            16,
-            13,
-            22,
-            25,
-          ],
-        },
-      }
-
-      const inactiveRoutesLayer: mapboxgl.LineLayer = {
-        id: 'routes-inactive',
-        type: 'line',
-        layout: {
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#a0a0a0',
-          'line-gradient': [
-            'interpolate',
-            ['linear'],
-            ['line-progress'],
-            0,
-            '#a0a0a0',
-            1,
-            '#a0a0a0',
-          ],
-          'line-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            1,
-            ['boolean', ['feature-state', 'fadein'], false],
-            0.07,
-            0.5, // default
-          ],
-          'line-width': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            12,
-            5,
-            16,
-            13,
-            22,
-            25,
-          ],
-        },
-      }
 
       useEffect(() => {
         setSidebarData((prevState: StatsData[]): StatsData[] => { 
@@ -472,12 +395,12 @@ export default function Maps() {
                     mapStyle="mapbox://styles/mapbox/dark-v10"
                 >
                     <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
-                        <Layer {...inactiveRoutesLayer} />
+                        <Layer {...solidGrayLayer} />
                     </Source>
                     
                     <CurvedPolyline id="public-transit" origin={startLngLat} destination={endLngLat} ></CurvedPolyline>
                     <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
-                        <Layer  {...activeRoutesLayer} />
+                        <Layer  {...solidColoredLayer} />
                     </Source>
                 </Map>
             </div>
