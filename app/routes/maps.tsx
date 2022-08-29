@@ -11,8 +11,7 @@ import StatsWindow from "~/components/stats-window";
 import { TransitTypes } from "~/types/TransitTypes";
 import { useLoadScript } from "@react-google-maps/api";
 import CurvedPolyline from "~/components/curved-polyline";
-import { solidGrayLayer } from "~/layers/solidGrayLayer";
-import { solidColoredLayer } from "~/layers/solidColoredLayer";
+import { layerMap } from "~/layers/LayerMap";
 
 export async function loader({ request }: LoaderArgs) {
     return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
@@ -20,7 +19,7 @@ export async function loader({ request }: LoaderArgs) {
 
 export const links: LinksFunction = () => {
     return [{rel: 'stylesheet', href: 'https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css', as:"fetch"}];
-  };
+};
 
 
 type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
@@ -101,7 +100,7 @@ export default function Maps() {
     const [startLngLat, setStartLngLat] = useState<mapboxgl.LngLat>();
     const [endLngLat, setEndLngLat] = useState<mapboxgl.LngLat>();
 
-    const placeholderFeature: GeoJSON.Feature = {
+    const noFeature: GeoJSON.Feature = {
         type: "Feature",
         geometry: {
             type: 'LineString',
@@ -111,14 +110,15 @@ export default function Maps() {
     }
 
     const [activeTravelType, setActiveTravelType] = useState<string>('driving-traffic');
-    const [activeRoute, setActiveRoute] = useState<GeoJSON.Feature>();
-    const [inactiveRoutes , setInactiveRoutes] = useState<GeoJSON.FeatureCollection>();
     const [availableRoutes, setAvailableRoutes] = useState<Routes>({
-        'driving-traffic': placeholderFeature,
-        'cycling': placeholderFeature,
-        'walking': placeholderFeature,
-        'public-transport': placeholderFeature,
+        'driving-traffic': noFeature,
+        'cycling': noFeature,
+        'walking': noFeature,
+        'public-transport': noFeature,
     });
+    
+    const [activeRoute, setActiveRoute] = useState<GeoJSON.Feature>();
+    const [inactiveRoutes , setInactiveRoutes] = useState<Routes>(availableRoutes);
     const [routesDistances, setRoutesDistances] = useState<NameValue>({
         'driving-traffic': 0,
         'cycling': 0,
@@ -174,7 +174,7 @@ export default function Maps() {
         }
     ]);
 
-      useEffect(() => {
+    useEffect(() => {
         setSidebarData((prevState: StatsData[]): StatsData[] => { 
             const update: StatsData[] = [
                 ...prevState,
@@ -206,17 +206,14 @@ export default function Maps() {
 
     // Set the feature to be displayed in color
     useEffect(() => {
-        const features: GeoJSON.Feature[] = [];
+        let features: Routes = {};
         travelTypes.forEach(travelType => {
             if (travelType !== activeTravelType) {
-                features.push(availableRoutes[travelType]);
+                features[travelType] = availableRoutes[travelType];
             }
         });
 
-        setInactiveRoutes({
-            type: "FeatureCollection",
-            features: features
-        });
+        setInactiveRoutes(features);
 
 
         if (activeTravelType !== undefined) {
@@ -271,8 +268,13 @@ export default function Maps() {
                 newDistances[travelType] = response.body.routes[0].distance;
                 newDuration[travelType] = response.body.routes[0].duration;
                 newCarbon[travelType] = (response.body.routes[0].distance  / 1000) * carbonMultipliers[travelType]; // TODO: refine the carbon calculation
+            }).catch(() => {
+                newRoutes[travelType] = noFeature;
+
+                newDistances[travelType] = 0;
+                newDuration[travelType] = 0;
+                newCarbon[travelType] = 0;
             }))
-            // TODO: catch direction errors
         );
 
         await transitService.route({
@@ -300,15 +302,23 @@ export default function Maps() {
                     miscDist += step.distance.value;
                 }
             })
+            newRoutes['public-transport'] = CurvedPolyline(startLngLat, endLngLat);
 
             const totalCarbon = walkDist * carbonMultipliers['walking'] + trainDist * carbonMultipliers['train'] + busDist * carbonMultipliers['bus'] + miscDist * carbonMultipliers['public-transport'];
             
             newDistances['public-transport'] = response.routes[0].legs[0].distance.value;
             newDuration['public-transport'] = response.routes[0].legs[0].duration.value;
             newCarbon['public-transport'] = (totalCarbon  / 1000); // Divide by 1000 because distance used was meters but multiplier is per km. 
-        })
-        // TODO: catch direction errors
+        }).catch(() => {
+            newRoutes['public-transport'] = noFeature;
 
+            newDistances['public-transport'] = 0;
+            newDuration['public-transport'] = 0;
+            newCarbon['public-transport'] = 0;
+        });
+
+
+        console.log(newRoutes);
         setAvailableRoutes(newRoutes);
         setRoutesDistances(newDistances);
         setRoutesDuration(newDuration);
@@ -394,13 +404,13 @@ export default function Maps() {
                     style={{display: "flex absolute"}}
                     mapStyle="mapbox://styles/mapbox/dark-v10"
                 >
-                    <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
-                        <Layer {...solidGrayLayer} />
-                    </Source>
-                    
-                    <CurvedPolyline id="public-transit" origin={startLngLat} destination={endLngLat} ></CurvedPolyline>
+                    {Object.keys(inactiveRoutes).map((route) => 
+                        <Source generateId type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes[route]}>
+                            <Layer {...layerMap[route].inactiveLayer} />
+                        </Source>
+                    )}
                     <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
-                        <Layer  {...solidColoredLayer} />
+                        <Layer {...layerMap[activeTravelType].activeLayer} />
                     </Source>
                 </Map>
             </div>

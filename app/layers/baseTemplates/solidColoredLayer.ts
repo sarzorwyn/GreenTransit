@@ -1,5 +1,5 @@
-export const solidColoredLayer: mapboxgl.LineLayer = {
-    id: 'routes-active',
+export const cyclingActive: mapboxgl.LineLayer = {
+    id: 'cycling-active',
     type: 'line',
     layout: {
       'line-cap': 'round',
