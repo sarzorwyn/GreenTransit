@@ -10,6 +10,7 @@ import { NameValue } from "~/types/NameValue";
 import StatsWindow from "~/components/stats-window";
 import { TransitTypes } from "~/types/TransitTypes";
 import { useLoadScript } from "@react-google-maps/api";
+import CurvedPolyline from "~/components/curved-polyline";
 
 export async function loader({ request }: LoaderArgs) {
     return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
@@ -457,7 +458,7 @@ export default function Maps() {
                     mapboxAccessToken={apiKey[0]}
                     renderWorldCopies={false}
                     boxZoom={false}
-                    minZoom={8}
+                    // minZoom={8}
                     logoPosition={'bottom-left'}
                     attributionControl={false}
                     pitchWithRotate={false}
@@ -473,6 +474,8 @@ export default function Maps() {
                     <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
                         <Layer {...inactiveRoutesLayer} />
                     </Source>
+                    
+                    <CurvedPolyline id="public-transit" origin={startLngLat} destination={endLngLat} ></CurvedPolyline>
                     <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
                         <Layer  {...activeRoutesLayer} />
                     </Source>

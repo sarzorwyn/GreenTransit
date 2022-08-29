@@ -41,6 +41,7 @@
     "@remix-run/react": "^1.6.7",
     "@remix-run/serve": "^1.6.7",
     "@remix-run/server-runtime": "^1.6.7",
+    "@turf/turf": "^6.5.0",
     "bcryptjs": "^2.4.3",
     "isbot": "^3.5.0",
     "mapbox-gl": "^2.9.2",
