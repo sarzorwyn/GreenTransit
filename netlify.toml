@@ -1,6 +1,5 @@
 [build]
-  command = "npm install
-  remix build"
+  command = "remix build"
   publish = "public"
 
 [dev]
