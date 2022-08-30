@@ -7,13 +7,25 @@
     "start": "cross-env NODE_ENV=production netlify dev"
   },
   "dependencies": {
+    "@headlessui/react": "^1.6.6",
+    "@mapbox/mapbox-sdk": "^0.13.4",
     "@netlify/functions": "^1.0.0",
+    "@prisma/client": "^4.2.1",
+    "@react-google-maps/api": "^2.12.2",
     "@remix-run/netlify": "^1.7.0",
     "@remix-run/node": "^1.7.0",
     "@remix-run/react": "^1.7.0",
+    "@turf/turf": "^6.5.0",
+    "bcryptjs": "^2.4.3",
     "cross-env": "^7.0.3",
+    "isbot": "^3.5.2",
+    "mapbox-gl": "^2.10.0",
+    "prisma": "^4.2.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-map-gl": "^7.0.19",
+    "tiny-invariant": "^1.2.0",
+    "turf": "^3.0.14"
   },
   "devDependencies": {
     "@remix-run/dev": "^1.7.0",
