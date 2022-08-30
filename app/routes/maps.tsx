@@ -9,14 +9,17 @@ import { StatsData } from "~/types/StatsData";
 import { NameValue } from "~/types/NameValue";
 import StatsWindow from "~/components/stats-window";
 import { TransitTypes } from "~/types/TransitTypes";
+import { useLoadScript } from "@react-google-maps/api";
+import CurvedPolyline from "~/components/curved-polyline";
+import { layerMap } from "~/layers/LayerMap";
 
 export async function loader({ request }: LoaderArgs) {
-    return process.env.MAPBOX_API_KEY;
+    return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
 }
 
 export const links: LinksFunction = () => {
     return [{rel: 'stylesheet', href: 'https://api.tiles.mapbox.com/mapbox-gl-js/v0.53.0/mapbox-gl.css', as:"fetch"}];
-  };
+};
 
 
 type Libraries = ("drawing" | "geometry" | "localContext" | "places" | "visualization")[];
@@ -31,6 +34,8 @@ type CarbonMultipliers = {
     'cycling': number,
     'walking': number,
     'public-transport': number,
+    'bus': number,
+    'train': number,
 }
 
 /**
@@ -47,7 +52,7 @@ export default function Maps() {
     const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
     const MapboxDirectionsModule = require('@mapbox/mapbox-sdk/services/directions');
     const directionService = new MapboxDirectionsModule({
-        accessToken: apiKey,
+        accessToken: apiKey[0],
         unit: 'metric',
         alternatives: false,
         geometries: 'geojson',
@@ -55,15 +60,17 @@ export default function Maps() {
         flyTo: true,
     });
     const geocodingClient = new MapboxGeocoderSDK({
-        accessToken: apiKey
+        accessToken: apiKey[0],
     });
 
     const travelTypes: TransitTypes[] = ['driving-traffic', 'walking', 'cycling'];
     const carbonMultipliers: CarbonMultipliers = {
-        'driving-traffic': 271, // single person
+        'driving-traffic': 271, // whole car (to check again)
         'cycling': 5, // manufacturing emissions
         'walking': 0.0005, // manufacturing shoes + disposal 0.3kgCO2, 600km lifespan
-        'public-transport': 0, // TODO: get a coefficient
+        'public-transport': 118, // Fall back if unidentified 
+        'bus': 73, // per pax https://www.eco-business.com/news/singapores-mrt-lines-be-graded-green-ness/
+        'train': 13.2,
     }
     const lowerLat = 1.2;
     const upperLat = 1.48;
@@ -80,10 +87,10 @@ export default function Maps() {
     // Set up map and marker after map is fully loaded
     useEffect(() => {
         if (mapboxMapRef != undefined && mapboxMapRef.current != null) {
-            setMapboxMap(mapboxMapRef.current.getMap())
+            setMapboxMap(mapboxMapRef.current.getMap());
 
-            startMarker.current = new mapboxgl.Marker({color: "#20ba44"})
-            endMarker.current = new mapboxgl.Marker({color: "#972FFE"})
+            startMarker.current = new mapboxgl.Marker({color: "#20ba44"});
+            endMarker.current = new mapboxgl.Marker({color: "#972FFE"});
         }
     }, [mapboxMapRef.current?.loaded]);
 
@@ -93,7 +100,7 @@ export default function Maps() {
     const [startLngLat, setStartLngLat] = useState<mapboxgl.LngLat>();
     const [endLngLat, setEndLngLat] = useState<mapboxgl.LngLat>();
 
-    const placeholderFeature: GeoJSON.Feature = {
+    const noFeature: GeoJSON.Feature = {
         type: "Feature",
         geometry: {
             type: 'LineString',
@@ -103,115 +110,133 @@ export default function Maps() {
     }
 
     const [activeTravelType, setActiveTravelType] = useState<string>('driving-traffic');
-    const [activeRoute, setActiveRoute] = useState<GeoJSON.Feature>();
-    const [inactiveRoutes , setInactiveRoutes] = useState<GeoJSON.FeatureCollection>();
     const [availableRoutes, setAvailableRoutes] = useState<Routes>({
-        'driving-traffic': placeholderFeature,
-        'cycling': placeholderFeature,
-        'walking': placeholderFeature,
+        'driving-traffic': noFeature,
+        'cycling': noFeature,
+        'walking': noFeature,
+        'public-transport': noFeature,
     });
+    
+    const [activeRoute, setActiveRoute] = useState<GeoJSON.Feature>();
+    const [inactiveRoutes , setInactiveRoutes] = useState<Routes>(availableRoutes);
     const [routesDistances, setRoutesDistances] = useState<NameValue>({
         'driving-traffic': 0,
         'cycling': 0,
         'walking': 0,
+        'public-transport': 0,
     });
     const [routesDuration, setRoutesDuration] = useState<NameValue>({
         'driving-traffic': 0,
         'cycling': 0,
         'walking': 0,
+        'public-transport': 0,
     });
     const [routesCarbon, setRoutesCarbon] = useState<NameValue>({
         'driving-traffic': 0,
         'cycling': 0,
         'walking': 0,
+        'public-transport': 0,
     });
 
+    
+    const [sidebarData, setSidebarData] = useState<StatsData[]>([
+        {
+            id: 1,
+            title: 'Driving',
+            type: 'driving-traffic',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        },
+        {
+            id: 2,
+            title: 'Cycling',
+            type: 'cycling',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        },
+        {
+            id: 3,
+            title: 'Walking',
+            type: 'walking',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        },
+        {
+            id: 4,
+            title: 'Public Transit',
+            type: 'public-transport',
+            distanceMeters: 0,
+            durationSeconds: 0,
+            carbonGrams: 0,
+        }
+    ]);
 
-    const activeRoutesLayer: mapboxgl.LineLayer = {
-        id: 'routes-active',
-        type: 'line',
-        layout: {
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#20ba44',
-          'line-gradient': [
-            'interpolate',
-            ['linear'],
-            ['line-progress'],
-            0,
-            '#20ba44',
-            1,
-            '#972FFE',
-          ],
-          'line-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            1,
-            ['boolean', ['feature-state', 'fadein'], false],
-            0.07,
-            0.9, // default
-          ],
-          'line-width': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            12,
-            5,
-            16,
-            13,
-            22,
-            25,
-          ],
-        },
-      }
+    useEffect(() => {
+        setSidebarData((prevState: StatsData[]): StatsData[] => { 
+            const update: StatsData[] = [
+                ...prevState,
+            ];
 
-      const inactiveRoutesLayer: mapboxgl.LineLayer = {
-        id: 'routes-inactive',
-        type: 'line',
-        layout: {
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#a0a0a0',
-          'line-gradient': [
-            'interpolate',
-            ['linear'],
-            ['line-progress'],
-            0,
-            '#a0a0a0',
-            1,
-            '#a0a0a0',
-          ],
-          'line-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'hover'], false],
-            1,
-            ['boolean', ['feature-state', 'fadein'], false],
-            0.07,
-            0.5, // default
-          ],
-          'line-width': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            12,
-            5,
-            16,
-            13,
-            22,
-            25,
-          ],
-        },
-      }
+            const sortedDistance = Object.keys(routesDistances).sort((a, b) => {
+                return routesDistances[a] - routesDistances[b];
+            });
+
+            const sortedDuration = Object.keys(routesDuration).sort((a, b) => {
+                return routesDuration[a] - routesDuration[b];
+            });
+
+            const sortedCarbon = Object.keys(routesCarbon).sort((a, b) => {
+                return routesCarbon[a] - routesCarbon[b];
+            });
+
+            update.map((value) => {
+                value.distanceMeters = routesDistances[value.type];
+                value.durationSeconds = routesDuration[value.type];
+                value.carbonGrams = routesCarbon[value.type];
+                value.distanceRank = sortedDistance.indexOf(value.type);
+                value.durationRank = sortedDuration.indexOf(value.type);
+                value.carbonRank = sortedCarbon.indexOf(value.type);
+            })
+            return update;
+        })
+    }, [routesDistances, routesDuration]);
+
+    // Set the feature to be displayed in color
+    useEffect(() => {
+        let features: Routes = {};
+        travelTypes.forEach(travelType => {
+            if (travelType !== activeTravelType) {
+                features[travelType] = availableRoutes[travelType];
+            }
+        });
+
+        setInactiveRoutes(features);
+
+
+        if (activeTravelType !== undefined) {
+            setActiveRoute(availableRoutes[activeTravelType]);
+        }
+    }, [activeTravelType, availableRoutes]);
+
+    const { isLoaded } = useLoadScript({
+        googleMapsApiKey: apiKey[1],
+        libraries: libraries,
+    });
+
+    if (!isLoaded ) {
+        return <div/>;
+    }
+
+    const transitService = new google.maps.DirectionsService();
 
     const calculateRoute = async () => {
         if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
             return;
         }
 
-        // Public transport is not included here as mapbox does not support it natively
-        // TODO: add another api that calculates public transit time/ distance and display those data without directions due to TOS restrictions
         const newRoutes: Routes = {};
         const newDistances: NameValue = {};
         const newDuration: NameValue = {};
@@ -242,36 +267,63 @@ export default function Maps() {
                 };
                 newDistances[travelType] = response.body.routes[0].distance;
                 newDuration[travelType] = response.body.routes[0].duration;
-                newCarbon[travelType] = (response.body.routes[0].duration  / 1000) * carbonMultipliers[travelType]; // TODO: refine the carbon calculation
+                newCarbon[travelType] = (response.body.routes[0].distance  / 1000) * carbonMultipliers[travelType]; // TODO: refine the carbon calculation
+            }).catch(() => {
+                newRoutes[travelType] = noFeature;
+
+                newDistances[travelType] = 0;
+                newDuration[travelType] = 0;
+                newCarbon[travelType] = 0;
             }))
-            // TODO: catch direction errors
         );
-        
+
+        await transitService.route({
+            origin: startLngLat.lat + ', ' + startLngLat.lng,
+            destination: endLngLat.lat + ', ' + endLngLat.lng,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            avoidFerries: true
+        }).then((response: any) => {
+            console.log(response.routes[0])
+
+            // Separate train, bus and walking distances for CO2 calc
+            let trainDist = 0;
+            let busDist = 0;
+            let walkDist = 0;
+            let miscDist = 0;
+
+            response.routes[0].legs[0].steps.map((step: any) => {
+                if (step.travel_mode === "WALKING") {
+                    walkDist += step.distance.value;
+                } else if (step.travel_mode === "TRANSIT" && step.transit.line.vehicle.type === "SUBWAY") {
+                    trainDist += step.distance.value;
+                } else if (step.travel_mode === "TRANSIT" && step.transit.line.vehicle.type === "BUS") {
+                    busDist += step.distance.value;
+                } else {
+                    miscDist += step.distance.value;
+                }
+            })
+            newRoutes['public-transport'] = CurvedPolyline(startLngLat, endLngLat);
+
+            const totalCarbon = walkDist * carbonMultipliers['walking'] + trainDist * carbonMultipliers['train'] + busDist * carbonMultipliers['bus'] + miscDist * carbonMultipliers['public-transport'];
+            
+            newDistances['public-transport'] = response.routes[0].legs[0].distance.value;
+            newDuration['public-transport'] = response.routes[0].legs[0].duration.value;
+            newCarbon['public-transport'] = (totalCarbon  / 1000); // Divide by 1000 because distance used was meters but multiplier is per km. 
+        }).catch(() => {
+            newRoutes['public-transport'] = noFeature;
+
+            newDistances['public-transport'] = 0;
+            newDuration['public-transport'] = 0;
+            newCarbon['public-transport'] = 0;
+        });
+
+
+        console.log(newRoutes);
         setAvailableRoutes(newRoutes);
         setRoutesDistances(newDistances);
         setRoutesDuration(newDuration);
         setRoutesCarbon(newCarbon);
     }
-
-    // Set the feature to be displayed in color
-    useEffect(() => {
-        const features: GeoJSON.Feature[] = [];
-        travelTypes.forEach(travelType => {
-            if (travelType !== activeTravelType) {
-                features.push(availableRoutes[travelType]);
-            }
-        });
-
-        setInactiveRoutes({
-            type: "FeatureCollection",
-            features: features
-        });
-
-
-        if (activeTravelType !== undefined) {
-            setActiveRoute(availableRoutes[activeTravelType]);
-        }
-    }, [activeTravelType, availableRoutes]);
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
         if (marker.current !== undefined && latLng !== null) {
@@ -327,65 +379,6 @@ export default function Maps() {
         }
     }
 
-    const [sidebarData, setSidebarData] = useState<StatsData[]>([
-        {
-            id: 1,
-            title: 'Driving',
-            type: 'driving-traffic',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        },
-        {
-            id: 2,
-            title: 'Cycling',
-            type: 'cycling',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        },
-        {
-            id: 3,
-            title: 'Walking',
-            type: 'walking',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        }
-    ]);
-
-    useEffect(() => {
-        setSidebarData((prevState: StatsData[]): StatsData[] => {
-            const update: StatsData[] = [
-                ...prevState,
-            ];
-
-            const sortedDistance = Object.keys(routesDistances).sort((a, b) => {
-                return routesDistances[a] - routesDistances[b];
-            });
-
-            const sortedDuration = Object.keys(routesDuration).sort((a, b) => {
-                return routesDuration[a] - routesDuration[b];
-            });
-
-            const sortedCarbon = Object.keys(routesCarbon).sort((a, b) => {
-                return routesCarbon[a] - routesCarbon[b];
-            });
-
-            update.map((value) => {
-                value.distanceMeters = routesDistances[value.type];
-                value.durationSeconds = routesDuration[value.type];
-                value.carbonGrams = routesCarbon[value.type];
-                value.distanceRank = sortedDistance.indexOf(value.type);
-                value.durationRank = sortedDuration.indexOf(value.type);
-                value.carbonRank = sortedCarbon.indexOf(value.type);
-            })
-            return update;
-        })
-
-        console.log(sidebarData);
-    }, [routesDistances, routesDuration]);
-
     return (
         <div className="bg-gray-400 flex h-screen justify-center">
             <div className="w-full h-full z-0">
@@ -395,10 +388,10 @@ export default function Maps() {
                         bounds: [lowerLng, lowerLat, upperLng, upperLat],
                         zoom: 14
                     }}
-                    mapboxAccessToken={apiKey}
+                    mapboxAccessToken={apiKey[0]}
                     renderWorldCopies={false}
                     boxZoom={false}
-                    minZoom={8}
+                    // minZoom={8}
                     logoPosition={'bottom-left'}
                     attributionControl={false}
                     pitchWithRotate={false}
@@ -411,11 +404,18 @@ export default function Maps() {
                     style={{display: "flex absolute"}}
                     mapStyle="mapbox://styles/mapbox/dark-v10"
                 >
-                    <Source id="inactive-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes}>
-                        <Layer {...inactiveRoutesLayer} />
+                    {/* TODO: reorder source elements to show active one on top always */}
+                    <Source id='driving-traffic' type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes['driving-traffic']}>
+                        <Layer {...(activeTravelType === 'driving-traffic' ? layerMap['driving-traffic'].activeLayer : layerMap['driving-traffic'].inactiveLayer)}/>
                     </Source>
-                    <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
-                        <Layer  {...activeRoutesLayer} />
+                    <Source id='cycling' type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes['cycling']}>
+                        <Layer {...(activeTravelType === 'cycling' ? layerMap['cycling'].activeLayer : layerMap['cycling'].inactiveLayer)}/>
+                    </Source>
+                    <Source id='walking' type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes['walking']}>
+                        <Layer {...(activeTravelType === 'walking' ? layerMap['walking'].activeLayer : layerMap['walking'].inactiveLayer)}/>
+                    </Source>
+                    <Source id='public-transport' type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes['public-transport']}>
+                        <Layer {...(activeTravelType === 'public-transport' ? layerMap['public-transport'].activeLayer : layerMap['public-transport'].inactiveLayer)}/>
                     </Source>
                 </Map>
             </div>
