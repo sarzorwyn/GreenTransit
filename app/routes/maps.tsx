@@ -404,16 +404,19 @@ export default function Maps() {
                     style={{display: "flex absolute"}}
                     mapStyle="mapbox://styles/mapbox/dark-v10"
                 >
-                    {Object.keys(availableRoutes).map((route) => 
-                        <Source type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes[route]}>
-                            {route === activeTravelType ? 
-                            <Layer {...layerMap[route].activeLayer} /> :
-                            <Layer {...layerMap[route].inactiveLayer} />}
-                        </Source>
-                    )}
-                    {/* <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
-                        <Layer {...layerMap[activeTravelType].activeLayer} />
-                    </Source> */}
+                    {/* TODO: reorder source elements to show active one on top always */}
+                    <Source id='driving-traffic' type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes['driving-traffic']}>
+                        <Layer {...(activeTravelType === 'driving-traffic' ? layerMap['driving-traffic'].activeLayer : layerMap['driving-traffic'].inactiveLayer)}/>
+                    </Source>
+                    <Source id='cycling' type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes['cycling']}>
+                        <Layer {...(activeTravelType === 'cycling' ? layerMap['cycling'].activeLayer : layerMap['cycling'].inactiveLayer)}/>
+                    </Source>
+                    <Source id='walking' type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes['walking']}>
+                        <Layer {...(activeTravelType === 'walking' ? layerMap['walking'].activeLayer : layerMap['walking'].inactiveLayer)}/>
+                    </Source>
+                    <Source id='public-transport' type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes['public-transport']}>
+                        <Layer {...(activeTravelType === 'public-transport' ? layerMap['public-transport'].activeLayer : layerMap['public-transport'].inactiveLayer)}/>
+                    </Source>
                 </Map>
             </div>
             <Transition

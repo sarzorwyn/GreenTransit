@@ -5,6 +5,7 @@ export const walkingActive: mapboxgl.LineLayer = {
     'line-cap': 'round',
   },
   paint: {
+    'line-dasharray': [0, 2],
     'line-color': '#20ba44',
     'line-gradient': [
       'interpolate',
@@ -13,7 +14,7 @@ export const walkingActive: mapboxgl.LineLayer = {
       0,
       '#20ba44',
       1,
-      '#972FFE',
+      '#20dc44',
     ],
     'line-opacity': [
       'case',
@@ -45,6 +46,7 @@ export const walkingInactive: mapboxgl.LineLayer = {
   },
   paint: {
     'line-color': '#a0a0a0',
+    'line-dasharray': [0, 2],
     'line-opacity': [
       'case',
       ['boolean', ['feature-state', 'hover'], false],

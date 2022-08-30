@@ -5,15 +5,15 @@ export const drivingTrafficActive: mapboxgl.LineLayer = {
     'line-cap': 'round',
   },
   paint: {
-    'line-color': '#20ba44',
+    'line-color': '#2066ba',
     'line-gradient': [
       'interpolate',
       ['linear'],
       ['line-progress'],
       0,
-      '#20ba44',
+      '#2066ba',
       1,
-      '#972FFE',
+      '#2088d0',
     ],
     'line-opacity': [
       'case',

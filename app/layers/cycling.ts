@@ -5,15 +5,15 @@ export const cyclingActive: mapboxgl.LineLayer = {
     'line-cap': 'round',
   },
   paint: {
-    'line-color': '#20ba44',
+    'line-color': '#d3db2e',
     'line-gradient': [
       'interpolate',
       ['linear'],
       ['line-progress'],
       0,
-      '#20ba44',
+      '#d3db2e',
       1,
-      '#972FFE',
+      '#cbd41c',
     ],
     'line-opacity': [
       'case',
