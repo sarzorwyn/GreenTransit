@@ -1,7 +1,12 @@
 {
     "cSpell.words": [
+        "Alata",
+        "fadein",
         "geocode",
         "GOOGLEMAPS",
-        "headlessui"
+        "headlessui",
+        "mapbox",
+        "mapboxgl",
+        "npoints"
     ]
 }

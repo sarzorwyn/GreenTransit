@@ -1,8 +1,10 @@
 node_modules
 .vscode
 
+/.cache
 /build
 /public/build
+/.netlify
 .env
 
 /cypress/screenshots
@@ -11,4 +13,3 @@ node_modules
 /prisma/data.db-journal
 
 /app/styles/tailwind.css
-.vscode/settings.json
