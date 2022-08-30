@@ -404,14 +404,16 @@ export default function Maps() {
                     style={{display: "flex absolute"}}
                     mapStyle="mapbox://styles/mapbox/dark-v10"
                 >
-                    {Object.keys(inactiveRoutes).map((route) => 
-                        <Source generateId type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={inactiveRoutes[route]}>
-                            <Layer {...layerMap[route].inactiveLayer} />
+                    {Object.keys(availableRoutes).map((route) => 
+                        <Source type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={availableRoutes[route]}>
+                            {route === activeTravelType ? 
+                            <Layer {...layerMap[route].activeLayer} /> :
+                            <Layer {...layerMap[route].inactiveLayer} />}
                         </Source>
                     )}
-                    <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
+                    {/* <Source id="active-route" type="geojson" tolerance={1} buffer={0} lineMetrics={true} data={activeRoute}>
                         <Layer {...layerMap[activeTravelType].activeLayer} />
-                    </Source>
+                    </Source> */}
                 </Map>
             </div>
             <Transition
