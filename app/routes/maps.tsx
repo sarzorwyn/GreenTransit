@@ -15,6 +15,7 @@ import { layerMap } from "~/layers/LayerMap";
 import { MapiResponse } from "@mapbox/mapbox-sdk/lib/classes/mapi-response";
 import { GeocodeService } from "@mapbox/mapbox-sdk/services/geocoding";
 import { DirectionsService } from "@mapbox/mapbox-sdk/services/directions";
+import useDebounce from "~/components/debounce";
 
 export async function loader({ request }: LoaderArgs) {
     return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
@@ -109,6 +110,8 @@ export default function Maps() {
 
     const [originQuery, setOriginQuery] = useState('');
     const [originInput, setOriginInput] = useState('');
+
+    const originDebounce = useDebounce(originQuery, 500);
 
 
     const apiKey = useLoaderData();
@@ -223,20 +226,17 @@ export default function Maps() {
     }, [activeTravelType, availableRoutes]);
     
     useEffect(() => {
-        const updateSuggestion = () => {
-            
-        console.log(originQuery)
-            if (originQuery === '') {
-                setOriginSuggestions(['a']);
-            } else {
-                const asyncCallback = async () => {
-                    setOriginSuggestions(await geocode(originQuery));
-                }
-                asyncCallback();
+        console.log(originDebounce)
+        if (originDebounce === '') {
+            setOriginSuggestions(['a']);
+        } else {
+            const asyncCallback = async () => {
+                setOriginSuggestions(await geocode(originDebounce));
             }
+            asyncCallback();
         }
         console.log(originSuggestions)
-    }, [originQuery]);
+    }, [originDebounce]);
     
     const { isLoaded } = useLoadScript({
         googleMapsApiKey: apiKey[1],
@@ -251,7 +251,7 @@ export default function Maps() {
     const transitService = new google.maps.DirectionsService();
 
     const calculateRoute = async () => {
-        if (startRef.current === null || startRef.current.value === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
+        if (originInput === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
             return;
         }
 
@@ -280,6 +280,7 @@ export default function Maps() {
             .send()
             .then((response: MapiResponse) => {
                 const geometry = toGeoJSON(response.body.routes[0].geometry);
+                console.log(geometry)
                 
                 newRoutes[travelType] = {    
                     type: "Feature",
@@ -345,9 +346,10 @@ export default function Maps() {
     }
 
     const geocode = async (query: string): Promise<string[]> => {
+        console.log(query)
         return await geocodingClient.forwardGeocode({
             query: query,
-            proximity: mapboxMap != undefined ? [mapboxMap.getCenter().lat, mapboxMap.getCenter().lng] : undefined
+            // proximity: mapboxMap != undefined ? [mapboxMap.getCenter().lat, mapboxMap.getCenter().lng] : undefined
         })
             .send()
             .then((response: MapiResponse) => {
@@ -392,9 +394,9 @@ export default function Maps() {
     }
 
     const setMarkers = async (lngLat: mapboxgl.LngLat) => {
-        if (startRef.current !== null && markerSelector === 'startLocation') {
+        if (originInput !== null && markerSelector === 'startLocation') {
             const feature = await getFeatureFromCoordinates(lngLat);
-            startRef.current.value = getPlaceName(feature, lngLat);
+            setOriginInput(getPlaceName(feature, lngLat));
             setStartLngLat(lngLat);
             placeMarker(lngLat, startMarker);
 
@@ -487,12 +489,13 @@ export default function Maps() {
                             <Combobox value={originInput} onChange={setOriginInput}>
                             <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
                             <Combobox.Input 
-                                className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"  
+                                className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                placeholder="Enter start point"
                                 onChange={(event) => setOriginQuery(event.target.value)} />
                             <Combobox.Options>
                             {originSuggestions.map((place) => (
                             <Combobox.Option 
-                                className="shadow appearance-none border rounded w-full py-1 px-2 text-gray-600 bg-slate-700 leading-tight focus:outline-none focus:shadow-outline"   
+                                className="shadow appearance-none border rounded max-w-sm py-1 px-2 text-gray-600 bg-slate-700 leading-tight focus:outline-none focus:shadow-outline"   
                                 key={place} 
                                 value={place}>
                             {place}
