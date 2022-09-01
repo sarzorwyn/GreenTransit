@@ -41,6 +41,63 @@ type CarbonMultipliers = {
     'train': number,
 }
 
+const noFeature: GeoJSON.Feature = {
+    type: "Feature",
+    geometry: {
+        type: 'LineString',
+        coordinates: [],
+    },
+    properties: null
+}
+
+const defaultRouteValue = {
+    'driving-traffic': 0,
+    'cycling': 0,
+    'walking': 0,
+    'public-transport': 0,
+};
+
+const sidebarDataDefault: StatsData[] = [
+    {
+        id: 1,
+        title: 'Driving',
+        type: 'driving-traffic',
+        distanceMeters: 0,
+        durationSeconds: 0,
+        carbonGrams: 0,
+    },
+    {
+        id: 2,
+        title: 'Cycling',
+        type: 'cycling',
+        distanceMeters: 0,
+        durationSeconds: 0,
+        carbonGrams: 0,
+    },
+    {
+        id: 3,
+        title: 'Walking',
+        type: 'walking',
+        distanceMeters: 0,
+        durationSeconds: 0,
+        carbonGrams: 0,
+    },
+    {
+        id: 4,
+        title: 'Public Transit',
+        type: 'public-transport',
+        distanceMeters: 0,
+        durationSeconds: 0,
+        carbonGrams: 0,
+    }
+];
+const defaultRoutes = {
+    'driving-traffic': noFeature,
+    'cycling': noFeature,
+    'walking': noFeature,
+    'public-transport': noFeature,
+};
+
 /**
  * The main map function with overlays.
  * TODO: All routes using different transportation options will be calculated and toggled when the user chooses them.
@@ -50,7 +107,7 @@ type CarbonMultipliers = {
 export default function Maps() {
     let [isShowingTopMenu, setIsShowingTopMenu] = useState(true);
 
-    const [originQuery, setQuery] = useState('');
+    const [originQuery, setOriginQuery] = useState('');
     const [originInput, setOriginInput] = useState('');
 
 
@@ -107,79 +164,14 @@ export default function Maps() {
     const [startLngLat, setStartLngLat] = useState<mapboxgl.LngLat>();
     const [endLngLat, setEndLngLat] = useState<mapboxgl.LngLat>();
 
-    const noFeature: GeoJSON.Feature = {
-        type: "Feature",
-        geometry: {
-            type: 'LineString',
-            coordinates: [],
-        },
-        properties: null
-    }
-
     const [activeTravelType, setActiveTravelType] = useState<string>('driving-traffic');
-    const [availableRoutes, setAvailableRoutes] = useState<Routes>({
-        'driving-traffic': noFeature,
-        'cycling': noFeature,
-        'walking': noFeature,
-        'public-transport': noFeature,
-    });
-    
+    const [availableRoutes, setAvailableRoutes] = useState<Routes>(defaultRoutes);
     const [activeRoute, setActiveRoute] = useState<GeoJSON.Feature>();
     const [inactiveRoutes , setInactiveRoutes] = useState<Routes>(availableRoutes);
-    const [routesDistances, setRoutesDistances] = useState<NameValue>({
-        'driving-traffic': 0,
-        'cycling': 0,
-        'walking': 0,
-        'public-transport': 0,
-    });
-    const [routesDuration, setRoutesDuration] = useState<NameValue>({
-        'driving-traffic': 0,
-        'cycling': 0,
-        'walking': 0,
-        'public-transport': 0,
-    });
-    const [routesCarbon, setRoutesCarbon] = useState<NameValue>({
-        'driving-traffic': 0,
-        'cycling': 0,
-        'walking': 0,
-        'public-transport': 0,
-    });
-
-    
-    const [sidebarData, setSidebarData] = useState<StatsData[]>([
-        {
-            id: 1,
-            title: 'Driving',
-            type: 'driving-traffic',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        },
-        {
-            id: 2,
-            title: 'Cycling',
-            type: 'cycling',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        },
-        {
-            id: 3,
-            title: 'Walking',
-            type: 'walking',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        },
-        {
-            id: 4,
-            title: 'Public Transit',
-            type: 'public-transport',
-            distanceMeters: 0,
-            durationSeconds: 0,
-            carbonGrams: 0,
-        }
-    ]);
+    const [routesDistances, setRoutesDistances] = useState<NameValue>(defaultRouteValue);
+    const [routesDuration, setRoutesDuration] = useState<NameValue>(defaultRouteValue);
+    const [routesCarbon, setRoutesCarbon] = useState<NameValue>(defaultRouteValue);
+    const [sidebarData, setSidebarData] = useState<StatsData[]>(sidebarDataDefault);
 
     const [originSuggestions, setOriginSuggestions] = useState<string[]>(['']);
 
@@ -229,25 +221,28 @@ export default function Maps() {
             setActiveRoute(availableRoutes[activeTravelType]);
         }
     }, [activeTravelType, availableRoutes]);
-
+    
+    useEffect(() => {
+        const updateSuggestion = () => {
+            
+        console.log(originQuery)
+            if (originQuery === '') {
+                setOriginSuggestions(['a']);
+            } else {
+                const asyncCallback = async () => {
+                    setOriginSuggestions(await geocode(originQuery));
+                }
+                asyncCallback();
+            }
+        }
+        console.log(originSuggestions)
+    }, [originQuery]);
+    
     const { isLoaded } = useLoadScript({
         googleMapsApiKey: apiKey[1],
         libraries: libraries,
     });
-
     
-    useEffect(() => {
-        if (originQuery === '') {
-            setOriginSuggestions(['a']);
-        } else {
-            const asyncCallback = async () => {
-                setOriginSuggestions(await geocode(originQuery));
-            }
-            asyncCallback();
-        }
-    },[originQuery]);
-
-
     // All hooks have to be before the Load check
     if (!isLoaded ) {
         return <div/>;
@@ -359,7 +354,7 @@ export default function Maps() {
                 console.log(response)
 
                 return response.body.features.flatMap((feature: any): string[] => {
-                    return feature.matching_place_name;
+                    return feature.place_name;
                 })
             }).catch(() => {
                 return [];
@@ -493,7 +488,7 @@ export default function Maps() {
                             <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
                             <Combobox.Input 
                                 className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"  
-                                onChange={(event) => setQuery(event.target.value)} />
+                                onChange={(event) => setOriginQuery(event.target.value)} />
                             <Combobox.Options>
                             {originSuggestions.map((place) => (
                             <Combobox.Option 
