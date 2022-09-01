@@ -1,4 +1,4 @@
-import { Switch, Transition } from "@headlessui/react";
+import { Combobox, Switch, Transition } from "@headlessui/react";
 import Map, { Layer, MapRef, Source } from 'react-map-gl';
 import { LinksFunction, LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
@@ -12,6 +12,9 @@ import { TransitTypes } from "~/types/TransitTypes";
 import { useLoadScript } from "@react-google-maps/api";
 import CurvedPolyline from "~/components/curved-polyline";
 import { layerMap } from "~/layers/LayerMap";
+import { MapiResponse } from "@mapbox/mapbox-sdk/lib/classes/mapi-response";
+import { GeocodeService } from "@mapbox/mapbox-sdk/services/geocoding";
+import { DirectionsService } from "@mapbox/mapbox-sdk/services/directions";
 
 export async function loader({ request }: LoaderArgs) {
     return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
@@ -47,11 +50,15 @@ type CarbonMultipliers = {
 export default function Maps() {
     let [isShowingTopMenu, setIsShowingTopMenu] = useState(true);
 
+    const [originQuery, setQuery] = useState('');
+    const [originInput, setOriginInput] = useState('');
+
+
     const apiKey = useLoaderData();
 
     const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
     const MapboxDirectionsModule = require('@mapbox/mapbox-sdk/services/directions');
-    const directionService = new MapboxDirectionsModule({
+    const directionService: DirectionsService = new MapboxDirectionsModule({
         accessToken: apiKey[0],
         unit: 'metric',
         alternatives: false,
@@ -59,7 +66,7 @@ export default function Maps() {
         controls: { instructions: false },
         flyTo: true,
     });
-    const geocodingClient = new MapboxGeocoderSDK({
+    const geocodingClient: GeocodeService = new MapboxGeocoderSDK({
         accessToken: apiKey[0],
     });
 
@@ -174,6 +181,8 @@ export default function Maps() {
         }
     ]);
 
+    const [originSuggestions, setOriginSuggestions] = useState<string[]>(['']);
+
     useEffect(() => {
         setSidebarData((prevState: StatsData[]): StatsData[] => { 
             const update: StatsData[] = [
@@ -226,6 +235,20 @@ export default function Maps() {
         libraries: libraries,
     });
 
+    
+    useEffect(() => {
+        if (originQuery === '') {
+            setOriginSuggestions(['a']);
+        } else {
+            const asyncCallback = async () => {
+                setOriginSuggestions(await geocode(originQuery));
+            }
+            asyncCallback();
+        }
+    },[originQuery]);
+
+
+    // All hooks have to be before the Load check
     if (!isLoaded ) {
         return <div/>;
     }
@@ -242,7 +265,9 @@ export default function Maps() {
         const newDuration: NameValue = {};
         const newCarbon: NameValue = {};
 
-        await Promise.all(travelTypes.map((travelType: TransitTypes) => 
+        await Promise.all(travelTypes.map((travelType: TransitTypes) => {
+            if (travelType === 'public-transport') return;
+
             directionService.getDirections({
                 profile: travelType,
                 waypoints: [
@@ -254,10 +279,11 @@ export default function Maps() {
                 }
                 ],
                 overview: "full",
+                // @ts-ignore: ferry should be always avoided as it is out of scope
                 exclude: "ferry"
             })
             .send()
-            .then((response: any) => {
+            .then((response: MapiResponse) => {
                 const geometry = toGeoJSON(response.body.routes[0].geometry);
                 
                 newRoutes[travelType] = {    
@@ -274,7 +300,7 @@ export default function Maps() {
                 newDistances[travelType] = 0;
                 newDuration[travelType] = 0;
                 newCarbon[travelType] = 0;
-            }))
+            })})
         );
 
         await transitService.route({
@@ -283,7 +309,6 @@ export default function Maps() {
             travelMode: google.maps.TravelMode.TRANSIT,
             avoidFerries: true
         }).then((response: any) => {
-            console.log(response.routes[0])
 
             // Separate train, bus and walking distances for CO2 calc
             let trainDist = 0;
@@ -318,12 +343,29 @@ export default function Maps() {
         });
 
 
-        console.log(newRoutes);
         setAvailableRoutes(newRoutes);
         setRoutesDistances(newDistances);
         setRoutesDuration(newDuration);
         setRoutesCarbon(newCarbon);
     }
+
+    const geocode = async (query: string): Promise<string[]> => {
+        return await geocodingClient.forwardGeocode({
+            query: query,
+            proximity: mapboxMap != undefined ? [mapboxMap.getCenter().lat, mapboxMap.getCenter().lng] : undefined
+        })
+            .send()
+            .then((response: MapiResponse) => {
+                console.log(response)
+
+                return response.body.features.flatMap((feature: any): string[] => {
+                    return feature.matching_place_name;
+                })
+            }).catch(() => {
+                return [];
+            });
+    }
+
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
         if (marker.current !== undefined && latLng !== null) {
@@ -334,7 +376,7 @@ export default function Maps() {
 
     const getFeatureFromCoordinates = (latLng: mapboxgl.LngLat | null) : Promise<MapboxGeocoder.Result> => {
         return geocodingClient.reverseGeocode({
-            query: [latLng?.lng, latLng?.lat]
+            query: [latLng!.lng, latLng!.lat]
           })
             .send()
             .then((response: any) => {
@@ -447,13 +489,31 @@ export default function Maps() {
                                 </Switch>
                                 
                             </label>
-                                <input autoComplete="street-address" 
+                            <Combobox value={originInput} onChange={setOriginInput}>
+                            <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
+                            <Combobox.Input 
+                                className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"  
+                                onChange={(event) => setQuery(event.target.value)} />
+                            <Combobox.Options>
+                            {originSuggestions.map((place) => (
+                            <Combobox.Option 
+                                className="shadow appearance-none border rounded w-full py-1 px-2 text-gray-600 bg-slate-700 leading-tight focus:outline-none focus:shadow-outline"   
+                                key={place} 
+                                value={place}>
+                            {place}
+                            </Combobox.Option>
+                            ))}
+                            </Combobox.Options>
+                            </div>
+                            </Combobox>
+                                {/* <input autoComplete="street-address" 
                                     className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
                                     id="Start Point" 
                                     type="text" 
                                     placeholder="Enter start point" 
                                     ref={startRef}
-                                />
+                                    // TODO: add dropdown menu here
+                                /> */}
                         </div>
                         <div className="">
                             <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
