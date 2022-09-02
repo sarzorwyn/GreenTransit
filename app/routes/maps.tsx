@@ -16,6 +16,7 @@ import { MapiResponse } from "@mapbox/mapbox-sdk/lib/classes/mapi-response";
 import { GeocodeService } from "@mapbox/mapbox-sdk/services/geocoding";
 import { DirectionsService } from "@mapbox/mapbox-sdk/services/directions";
 import useDebounce from "~/components/debounce";
+import { Feature } from "@turf/turf";
 
 export async function loader({ request }: LoaderArgs) {
     return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
@@ -108,6 +109,7 @@ const defaultRoutes = {
 export default function Maps() {
     let [isShowingTopMenu, setIsShowingTopMenu] = useState(true);
 
+    const [originOptions, setOriginOptions] = useState();
     const [originQuery, setOriginQuery] = useState('');
     const [originInput, setOriginInput] = useState('');
 
@@ -161,7 +163,7 @@ export default function Maps() {
         }
     }, [mapboxMapRef.current?.loaded]);
 
-    const startRef = useRef<HTMLInputElement>(null);
+    // const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
 
     const [startLngLat, setStartLngLat] = useState<mapboxgl.LngLat>();
@@ -176,7 +178,7 @@ export default function Maps() {
     const [routesCarbon, setRoutesCarbon] = useState<NameValue>(defaultRouteValue);
     const [sidebarData, setSidebarData] = useState<StatsData[]>(sidebarDataDefault);
 
-    const [originSuggestions, setOriginSuggestions] = useState<string[]>(['']);
+    const [originSuggestions, setOriginSuggestions] = useState<any>();
 
     useEffect(() => {
         setSidebarData((prevState: StatsData[]): StatsData[] => { 
@@ -226,16 +228,14 @@ export default function Maps() {
     }, [activeTravelType, availableRoutes]);
     
     useEffect(() => {
-        console.log(originDebounce)
         if (originDebounce === '') {
-            setOriginSuggestions(['a']);
+            setOriginSuggestions(['...']);
         } else {
             const asyncCallback = async () => {
                 setOriginSuggestions(await geocode(originDebounce));
             }
             asyncCallback();
         }
-        console.log(originSuggestions)
     }, [originDebounce]);
     
     const { isLoaded } = useLoadScript({
@@ -263,7 +263,7 @@ export default function Maps() {
         await Promise.all(travelTypes.map((travelType: TransitTypes) => {
             if (travelType === 'public-transport') return;
 
-            directionService.getDirections({
+            return directionService.getDirections({
                 profile: travelType,
                 waypoints: [
                 {
@@ -280,7 +280,6 @@ export default function Maps() {
             .send()
             .then((response: MapiResponse) => {
                 const geometry = toGeoJSON(response.body.routes[0].geometry);
-                console.log(geometry)
                 
                 newRoutes[travelType] = {    
                     type: "Feature",
@@ -338,26 +337,24 @@ export default function Maps() {
             newCarbon['public-transport'] = 0;
         });
 
-
+        console.log(newRoutes)
         setAvailableRoutes(newRoutes);
         setRoutesDistances(newDistances);
         setRoutesDuration(newDuration);
         setRoutesCarbon(newCarbon);
     }
 
-    const geocode = async (query: string): Promise<string[]> => {
+    const geocode = async (query: string): Promise<Feature[]> => {
         console.log(query)
         return await geocodingClient.forwardGeocode({
             query: query,
-            // proximity: mapboxMap != undefined ? [mapboxMap.getCenter().lat, mapboxMap.getCenter().lng] : undefined
+            proximity: mapboxMap != undefined ? [mapboxMap.getCenter().lng, mapboxMap.getCenter().lat] : undefined
         })
             .send()
-            .then((response: MapiResponse) => {
+            .then((response: MapiResponse): Feature[] => {
                 console.log(response)
 
-                return response.body.features.flatMap((feature: any): string[] => {
-                    return feature.place_name;
-                })
+                return response.body.features;
             }).catch(() => {
                 return [];
             });
@@ -365,15 +362,16 @@ export default function Maps() {
 
 
     const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
-        if (marker.current !== undefined && latLng !== null) {
+        if (marker.current !== undefined && latLng !== null && mapboxMap != undefined) {
             marker.current.setLngLat(latLng);
-            marker.current.addTo(mapboxMap!);
+            marker.current.addTo(mapboxMap);
         }
     }
 
     const getFeatureFromCoordinates = (latLng: mapboxgl.LngLat | null) : Promise<MapboxGeocoder.Result> => {
         return geocodingClient.reverseGeocode({
-            query: [latLng!.lng, latLng!.lat]
+            query: [latLng!.lng, latLng!.lat],
+            // proximity: mapboxMap != undefined ? [mapboxMap.getCenter().lat, mapboxMap.getCenter().lng] : undefined
           })
             .send()
             .then((response: any) => {
@@ -493,14 +491,14 @@ export default function Maps() {
                                 placeholder="Enter start point"
                                 onChange={(event) => setOriginQuery(event.target.value)} />
                             <Combobox.Options>
-                            {originSuggestions.map((place) => (
-                            <Combobox.Option 
-                                className="shadow appearance-none border rounded max-w-sm py-1 px-2 text-gray-600 bg-slate-700 leading-tight focus:outline-none focus:shadow-outline"   
-                                key={place} 
-                                value={place}>
-                            {place}
-                            </Combobox.Option>
-                            ))}
+                                {originSuggestions.map((place) => (
+                                    <Combobox.Option 
+                                        className="shadow appearance-none border rounded max-w-sm py-1 px-2 text-gray-600 bg-slate-700 leading-tight focus:outline-none focus:shadow-outline"   
+                                        key={place} 
+                                        value={place}>
+                                    {place}
+                                    </Combobox.Option>
+                                ))}
                             </Combobox.Options>
                             </div>
                             </Combobox>
