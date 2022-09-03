@@ -108,14 +108,6 @@ const defaultRoutes = {
  */
 export default function Maps() {
     let [isShowingTopMenu, setIsShowingTopMenu] = useState(true);
-
-    const [originOptions, setOriginOptions] = useState();
-    const [originQuery, setOriginQuery] = useState('');
-    const [originInput, setOriginInput] = useState('');
-
-    const originDebounce = useDebounce(originQuery, 500);
-
-
     const apiKey = useLoaderData();
 
     const MapboxGeocoderSDK = require('@mapbox/mapbox-sdk/services/geocoding')
@@ -166,7 +158,12 @@ export default function Maps() {
     // const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
 
+    const [startSuggestions, setStartSuggestions] = useState<any>();
+    const [startQuery, setStartQuery] = useState('');
+    const [startInput, setStartInput] = useState('');
+    const startDebounce = useDebounce(startQuery, 500);
     const [startLngLat, setStartLngLat] = useState<mapboxgl.LngLat>();
+
     const [endLngLat, setEndLngLat] = useState<mapboxgl.LngLat>();
 
     const [activeTravelType, setActiveTravelType] = useState<string>('driving-traffic');
@@ -177,8 +174,6 @@ export default function Maps() {
     const [routesDuration, setRoutesDuration] = useState<NameValue>(defaultRouteValue);
     const [routesCarbon, setRoutesCarbon] = useState<NameValue>(defaultRouteValue);
     const [sidebarData, setSidebarData] = useState<StatsData[]>(sidebarDataDefault);
-
-    const [originSuggestions, setOriginSuggestions] = useState<any>();
 
     useEffect(() => {
         setSidebarData((prevState: StatsData[]): StatsData[] => { 
@@ -228,15 +223,43 @@ export default function Maps() {
     }, [activeTravelType, availableRoutes]);
     
     useEffect(() => {
-        if (originDebounce === '') {
-            setOriginSuggestions(['...']);
+        if (startDebounce === '') {
+            setStartSuggestions(['...']);
         } else {
             const asyncCallback = async () => {
-                setOriginSuggestions(await geocode(originDebounce));
+                setStartSuggestions(await geocode(startDebounce));
             }
             asyncCallback();
         }
-    }, [originDebounce]);
+    }, [startDebounce]);
+
+    const updateLngLat = (input: string, suggestions: any[]) => {
+        if (input !== '') {
+
+            const selection = suggestions.filter((e: any) => e.text === input);
+            console.log(selection)
+            if (selection != undefined) {
+                setStartLngLat(mapboxgl.LngLat.convert(selection[0].geometry.coordinates));
+            }
+        }
+    };
+
+    const selectInput = (input: string) => {
+        setStartInput(input);
+        updateLngLat(input, startSuggestions);
+    }
+
+    useEffect(() => {
+        if (startLngLat != undefined) {
+            placeMarker(startLngLat, startMarker);
+        }
+    }, [startLngLat]);
+
+    useEffect(() => {
+        if (endLngLat != undefined) {
+            placeMarker(endLngLat, endMarker);
+        }
+    }, [endLngLat]);
     
     const { isLoaded } = useLoadScript({
         googleMapsApiKey: apiKey[1],
@@ -251,7 +274,7 @@ export default function Maps() {
     const transitService = new google.maps.DirectionsService();
 
     const calculateRoute = async () => {
-        if (originInput === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
+        if (startInput === '' || endRef.current === null || endRef.current.value === '' || startLngLat == null || endLngLat == null) {
             return;
         }
 
@@ -337,23 +360,19 @@ export default function Maps() {
             newCarbon['public-transport'] = 0;
         });
 
-        console.log(newRoutes)
         setAvailableRoutes(newRoutes);
         setRoutesDistances(newDistances);
         setRoutesDuration(newDuration);
         setRoutesCarbon(newCarbon);
     }
 
-    const geocode = async (query: string): Promise<Feature[]> => {
-        console.log(query)
+    const geocode = async (query: string): Promise<any> => {
         return await geocodingClient.forwardGeocode({
             query: query,
             proximity: mapboxMap != undefined ? [mapboxMap.getCenter().lng, mapboxMap.getCenter().lat] : undefined
         })
             .send()
-            .then((response: MapiResponse): Feature[] => {
-                console.log(response)
-
+            .then((response: MapiResponse) => {
                 return response.body.features;
             }).catch(() => {
                 return [];
@@ -392,18 +411,16 @@ export default function Maps() {
     }
 
     const setMarkers = async (lngLat: mapboxgl.LngLat) => {
-        if (originInput !== null && markerSelector === 'startLocation') {
+        if (startInput !== null && markerSelector === 'startLocation') {
             const feature = await getFeatureFromCoordinates(lngLat);
-            setOriginInput(getPlaceName(feature, lngLat));
+            setStartInput(getPlaceName(feature, lngLat));
             setStartLngLat(lngLat);
-            placeMarker(lngLat, startMarker);
 
             // startMarker?.setLngLat(e.lngLat);
         } else if (endRef.current !== null && markerSelector === 'endLocation') {
             const feature = await getFeatureFromCoordinates(lngLat);
             endRef.current.value = getPlaceName(feature, lngLat);
             setEndLngLat(lngLat);
-            placeMarker(lngLat, endMarker);
         }
         setMarkerSelector('');
     }
@@ -411,9 +428,7 @@ export default function Maps() {
     const mapClick = async (e: mapboxgl.MapLayerMouseEvent) => {
         if (markerSelector !== '') {
             await setMarkers(e.lngLat);
-        } else if (e.features != undefined) {
-            console.log(e.features)
-        }
+        } 
     }
 
     return (
@@ -484,19 +499,19 @@ export default function Maps() {
                                 </Switch>
                                 
                             </label>
-                            <Combobox value={originInput} onChange={setOriginInput}>
+                            <Combobox value={startInput} onChange={selectInput}>
                             <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
                             <Combobox.Input 
                                 className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                 placeholder="Enter start point"
-                                onChange={(event) => setOriginQuery(event.target.value)} />
+                                onChange={(event) => setStartQuery(event.target.value)} />
                             <Combobox.Options>
-                                {originSuggestions.map((place) => (
+                                {startSuggestions.map((place: any) => (
                                     <Combobox.Option 
                                         className="shadow appearance-none border rounded max-w-sm py-1 px-2 text-gray-600 bg-slate-700 leading-tight focus:outline-none focus:shadow-outline"   
-                                        key={place} 
-                                        value={place}>
-                                    {place}
+                                        key={place.text} 
+                                        value={place.text}>
+                                    {place.text}
                                     </Combobox.Option>
                                 ))}
                             </Combobox.Options>
