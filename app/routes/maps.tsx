@@ -16,6 +16,8 @@ import { MapiResponse } from "@mapbox/mapbox-sdk/lib/classes/mapi-response";
 import { GeocodeService } from "@mapbox/mapbox-sdk/services/geocoding";
 import { DirectionsService } from "@mapbox/mapbox-sdk/services/directions";
 import useDebounce from "~/utils/debounce";
+import { LocationState, locationActions } from "../types/LocationState";
+import InputAutocomplete from "~/components/inputAutocomplete";
 
 export async function loader({ request }: LoaderArgs) {
     return [process.env.MAPBOX_API_KEY, process.env.MAPS_API_KEY];
@@ -40,14 +42,6 @@ type CarbonMultipliers = {
     'public-transport': number,
     'bus': number,
     'train': number,
-}
-
-type LocationState = {
-    query: string,
-    input: string,
-    suggestions: any,
-    lngLat: mapboxgl.LngLat | undefined,
-    marker: MutableRefObject<mapboxgl.Marker | undefined>
 }
 
 type LocationActions = ('updateQuery' | 'updateInput' | 'updateSuggestions' | 'updateLngLat');
@@ -149,8 +143,6 @@ export default function Maps() {
 
     const mapboxMapRef = useRef<MapRef>(null);
     const [mapboxMap, setMapboxMap] = useState<mapboxgl.Map>();
-
-    const endMarker = useRef<mapboxgl.Marker>();
     const [markerSelector, setMarkerSelector] = useState<string>('');
 
     // Set up map and marker after map is fully loaded
@@ -158,58 +150,69 @@ export default function Maps() {
         if (mapboxMapRef != undefined && mapboxMapRef.current != null) {
             setMapboxMap(mapboxMapRef.current.getMap());
             startLocationDispatch({type: locationActions.createMarker, payload: "#20ba44"});
-            endMarker.current = new mapboxgl.Marker({color: "#972FFE"});
+            endLocationDispatch({type: locationActions.createMarker, payload: "#972FFE"});
         }
     }, [mapboxMapRef.current?.loaded]);
-
-    // const startRef = useRef<HTMLInputElement>(null);
-    const endRef = useRef<HTMLInputElement>(null);
 
     const initialLocationState: LocationState = {
         query: '',
         input: '',
         suggestions: undefined,
         lngLat: undefined,
-        marker: useRef<mapboxgl.Marker>(),
+        marker: undefined,
     }
 
-    const locationActions = {
-        updateQuery: 'updateQuery',
-        updateInput: 'updateInput',
-        updateSuggestions: 'updateSuggestions',
-        updateLngLat: 'updateLngLat',
-        createMarker: 'createMarker'
-    }
+    const getLngLat = (input: string, suggestions: any[]) => {
+        if (input !== '') {
+            const selection = suggestions.filter((e: any) => e.text === input);
+            if (selection != undefined) {
+                return selection[0].geometry.coordinates;
+            }
+        }
+        return undefined;
+    };
 
     const locationReducer = (state: LocationState, action: { type: string; payload: any; }): LocationState => {
         switch (action.type) {
             case locationActions.updateQuery:
                 return {...state, query: action.payload};
-            case locationActions.updateInput:
-                return {...state, input: action.payload };
+            case locationActions.selectInput:
+                const lngLat = getLngLat(action.payload, state.suggestions);
+                if (lngLat != undefined && state.marker != undefined  && mapboxMap != undefined) {
+                    state.marker.setLngLat(lngLat);
+                    state.marker.addTo(mapboxMap);
+                    return {...state, input: action.payload, lngLat: mapboxgl.LngLat.convert(lngLat)};
+                }
+
+                return {...state, input: action.payload};
+            case locationActions.mapClick:
+                if (action.payload.lngLat != undefined && state.marker != undefined  && mapboxMap != undefined) {
+                    state.marker.setLngLat(action.payload.lngLat);
+                    state.marker.addTo(mapboxMap);
+                    
+                    return {...state, input: action.payload.input, lngLat: action.payload.lngLat};
+                }
+                return {...state, input: action.payload.input, lngLat: action.payload.lngLat};
             case locationActions.updateSuggestions:
                 return {...state, suggestions: action.payload};
             case locationActions.updateLngLat:
-                if (state.marker.current !== undefined  && mapboxMap != undefined) {
-                    state.marker.current.setLngLat(action.payload);
-                    state.marker.current.addTo(mapboxMap);
+                if (state.marker != undefined  && mapboxMap != undefined) {
+                    state.marker.setLngLat(action.payload);
+                    state.marker.addTo(mapboxMap);
                 }
             
                 return {...state, lngLat: action.payload};
             case locationActions.createMarker:
-                const markerRef = state.marker;
-                markerRef.current = new mapboxgl.Marker({color: action.payload});
-                return {...state, marker: markerRef};
+                return {...state, marker: new mapboxgl.Marker({color: action.payload})};
             default:
                 return state;
         }
     }
 
     const [startLocation, startLocationDispatch] = useReducer(locationReducer, initialLocationState);
+    const [endLocation, endLocationDispatch] = useReducer(locationReducer, initialLocationState);
     const startDebounce = useDebounce(startLocation.query, 500);
-
-
-    const [endLngLat, setEndLngLat] = useState<mapboxgl.LngLat>();
+    const endDebounce = useDebounce(endLocation.query, 500);
 
     const [activeTravelType, setActiveTravelType] = useState<string>('driving-traffic');
     const [availableRoutes, setAvailableRoutes] = useState<Routes>(defaultRoutes);
@@ -226,17 +229,9 @@ export default function Maps() {
                 ...prevState,
             ];
 
-            const sortedDistance = Object.keys(routesDistances).sort((a, b) => {
-                return routesDistances[a] - routesDistances[b];
-            });
-
-            const sortedDuration = Object.keys(routesDuration).sort((a, b) => {
-                return routesDuration[a] - routesDuration[b];
-            });
-
-            const sortedCarbon = Object.keys(routesCarbon).sort((a, b) => {
-                return routesCarbon[a] - routesCarbon[b];
-            });
+            const sortedDistance = Object.keys(routesDistances).sort((a, b) => routesDistances[a] - routesDistances[b]);
+            const sortedDuration = Object.keys(routesDuration).sort((a, b) => routesDuration[a] - routesDuration[b]);
+            const sortedCarbon = Object.keys(routesCarbon).sort((a, b) => routesCarbon[a] - routesCarbon[b]);
 
             update.map((value) => {
                 value.distanceMeters = routesDistances[value.type];
@@ -278,27 +273,16 @@ export default function Maps() {
         }
     }, [startDebounce]);
 
-    const updateLngLat = (input: string, suggestions: any[]) => {
-        if (input !== '') {
-
-            const selection = suggestions.filter((e: any) => e.text === input);
-            console.log(selection)
-            if (selection != undefined) {
-                startLocationDispatch({type: locationActions.updateLngLat, payload: mapboxgl.LngLat.convert(selection[0].geometry.coordinates)});
-            }
-        }
-    };
-
-    const selectInput = (input: string) => {
-        startLocationDispatch({type: locationActions.updateInput, payload: input})
-        updateLngLat(input, startLocation.suggestions);
-    }
-
     useEffect(() => {
-        if (endLngLat != undefined) {
-            placeMarker(endLngLat, endMarker);
+        if (endDebounce === '') {
+            endLocationDispatch({type: locationActions.updateSuggestions, payload: ['...']});
+        } else {
+            const asyncCallback = async () => {
+                endLocationDispatch({type: locationActions.updateSuggestions, payload: await geocode(endDebounce)});
+            }
+            asyncCallback();
         }
-    }, [endLngLat]);
+    }, [endDebounce]);
     
     const { isLoaded } = useLoadScript({
         googleMapsApiKey: apiKey[1],
@@ -313,7 +297,7 @@ export default function Maps() {
     const transitService = new google.maps.DirectionsService();
 
     const calculateRoute = async () => {
-        if (startLocation.input === '' || endRef.current === null || endRef.current.value === '' || startLocation.lngLat == null || endLngLat == null) {
+        if (startLocation.input === '' || endLocation.input === '' || startLocation.lngLat == null || endLocation.lngLat == null) {
             return;
         }
 
@@ -323,7 +307,7 @@ export default function Maps() {
         const newCarbon: NameValue = {};
 
         await Promise.all(travelTypes.map((travelType: TransitTypes) => {
-            if (travelType === 'public-transport' || startLocation.lngLat == undefined) return;
+            if (travelType === 'public-transport' || startLocation.lngLat == undefined || endLocation.lngLat == undefined) return;
 
             return directionService.getDirections({
                 profile: travelType,
@@ -332,7 +316,7 @@ export default function Maps() {
                     coordinates: [startLocation.lngLat.lng, startLocation.lngLat.lat],
                 },
                 {
-                    coordinates: [endLngLat.lng, endLngLat.lat],
+                    coordinates: [endLocation.lngLat.lng, endLocation.lngLat.lat],
                 }
                 ],
                 overview: "full",
@@ -362,7 +346,7 @@ export default function Maps() {
 
         await transitService.route({
             origin: startLocation.lngLat.lat + ', ' + startLocation.lngLat.lng,
-            destination: endLngLat.lat + ', ' + endLngLat.lng,
+            destination: endLocation.lngLat.lat + ', ' + endLocation.lngLat.lng,
             travelMode: google.maps.TravelMode.TRANSIT,
             avoidFerries: true
         }).then((response: any) => {
@@ -384,7 +368,7 @@ export default function Maps() {
                     miscDist += step.distance.value;
                 }
             })
-            newRoutes['public-transport'] = CurvedPolyline(startLocation.lngLat, endLngLat);
+            newRoutes['public-transport'] = CurvedPolyline(startLocation.lngLat, endLocation.lngLat);
 
             const totalCarbon = walkDist * carbonMultipliers['walking'] + trainDist * carbonMultipliers['train'] + busDist * carbonMultipliers['bus'] + miscDist * carbonMultipliers['public-transport'];
             
@@ -452,14 +436,14 @@ export default function Maps() {
     const setMarkers = async (lngLat: mapboxgl.LngLat) => {
         if (startLocation.input !== null && markerSelector === 'startLocation') {
             const feature = await getFeatureFromCoordinates(lngLat);
-            startLocationDispatch({type: locationActions.updateInput, payload: getPlaceName(feature, lngLat)});
-            startLocationDispatch({type: locationActions.updateLngLat, payload: lngLat});
-
-            // startMarker?.setLngLat(e.lngLat);
-        } else if (endRef.current !== null && markerSelector === 'endLocation') {
+            startLocationDispatch({type: locationActions.mapClick, payload: {input: getPlaceName(feature, lngLat), lngLat: lngLat}});
+            // startLocationDispatch({type: locationActions.updateInput, payload: getPlaceName(feature, lngLat)});
+            // startLocationDispatch({type: locationActions.updateLngLat, payload: lngLat});
+        } else if (endLocation.input !== null && markerSelector === 'endLocation') {
             const feature = await getFeatureFromCoordinates(lngLat);
-            endRef.current.value = getPlaceName(feature, lngLat);
-            setEndLngLat(lngLat);
+            endLocationDispatch({type: locationActions.mapClick, payload: {input: getPlaceName(feature, lngLat), lngLat: lngLat}});
+            // endLocationDispatch({type: locationActions.updateInput, payload: getPlaceName(feature, lngLat)});
+            // endLocationDispatch({type: locationActions.updateLngLat, payload: lngLat});
         }
         setMarkerSelector('');
     }
@@ -538,24 +522,7 @@ export default function Maps() {
                                 </Switch>
                                 
                             </label>
-                            <Combobox value={startLocation.input} onChange={(input) => selectInput(input)}>
-                                <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
-                                    <Combobox.Input 
-                                        className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                        placeholder="Enter start point"
-                                        onChange={(event) => startLocationDispatch({type: locationActions.updateQuery, payload: event.target.value})} />
-                                    <Combobox.Options>
-                                        {startLocation.suggestions.map((place: any) => (
-                                            <Combobox.Option 
-                                                className="shadow appearance-none border rounded max-w-sm py-1 px-2 text-gray-600 bg-slate-700 leading-tight focus:outline-none focus:shadow-outline"   
-                                                key={place.text} 
-                                                value={place.text}>
-                                            {place.text}
-                                            </Combobox.Option>
-                                        ))}
-                                    </Combobox.Options>
-                                </div>
-                            </Combobox>
+                            <InputAutocomplete locationState={startLocation} dispatch={startLocationDispatch} placeholder={"Enter start point"}></InputAutocomplete>
                         </div>
                         <div className="">
                             <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="destination">
@@ -571,12 +538,7 @@ export default function Maps() {
                                     </svg>
                                 </Switch>
                             </label>
-                                <input className="shadow appearance-none border rounded w-full py-1 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-                                    id="End Point" 
-                                    type="text" 
-                                    placeholder="Enter end point" 
-                                    ref={endRef}
-                                />
+                            <InputAutocomplete locationState={endLocation} dispatch={endLocationDispatch} placeholder={"Enter end point"}></InputAutocomplete>
                         </div>
                     </div>
                     <div className="flex items-center justify-between sm:flex-row">
