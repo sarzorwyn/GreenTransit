@@ -42,6 +42,16 @@ type CarbonMultipliers = {
     'train': number,
 }
 
+type LocationState = {
+    query: string,
+    input: string,
+    suggestions: any,
+    lngLat: mapboxgl.LngLat | undefined,
+    marker: MutableRefObject<mapboxgl.Marker | undefined>
+}
+
+type LocationActions = ('updateQuery' | 'updateInput' | 'updateSuggestions' | 'updateLngLat');
+
 const noFeature: GeoJSON.Feature = {
     type: "Feature",
     geometry: {
@@ -140,7 +150,6 @@ export default function Maps() {
     const mapboxMapRef = useRef<MapRef>(null);
     const [mapboxMap, setMapboxMap] = useState<mapboxgl.Map>();
 
-    const startMarker = useRef<mapboxgl.Marker>();
     const endMarker = useRef<mapboxgl.Marker>();
     const [markerSelector, setMarkerSelector] = useState<string>('');
 
@@ -148,8 +157,7 @@ export default function Maps() {
     useEffect(() => {
         if (mapboxMapRef != undefined && mapboxMapRef.current != null) {
             setMapboxMap(mapboxMapRef.current.getMap());
-
-            startMarker.current = new mapboxgl.Marker({color: "#20ba44"});
+            startLocationDispatch({type: locationActions.createMarker, payload: "#20ba44"});
             endMarker.current = new mapboxgl.Marker({color: "#972FFE"});
         }
     }, [mapboxMapRef.current?.loaded]);
@@ -157,40 +165,48 @@ export default function Maps() {
     // const startRef = useRef<HTMLInputElement>(null);
     const endRef = useRef<HTMLInputElement>(null);
 
-    const initialLocationState = {
+    const initialLocationState: LocationState = {
         query: '',
         input: '',
         suggestions: undefined,
-        lngLat: undefined
+        lngLat: undefined,
+        marker: useRef<mapboxgl.Marker>(),
     }
 
     const locationActions = {
         updateQuery: 'updateQuery',
         updateInput: 'updateInput',
         updateSuggestions: 'updateSuggestions',
-        updateLngLat: 'updateLngLat'
+        updateLngLat: 'updateLngLat',
+        createMarker: 'createMarker'
     }
 
-    const locationReducer = (state, action) => {
+    const locationReducer = (state: LocationState, action: { type: string; payload: any; }): LocationState => {
         switch (action.type) {
             case locationActions.updateQuery:
                 return {...state, query: action.payload};
             case locationActions.updateInput:
-                return {...state, input: action.payload, };
+                return {...state, input: action.payload };
             case locationActions.updateSuggestions:
                 return {...state, suggestions: action.payload};
             case locationActions.updateLngLat:
+                if (state.marker.current !== undefined  && mapboxMap != undefined) {
+                    state.marker.current.setLngLat(action.payload);
+                    state.marker.current.addTo(mapboxMap);
+                }
+            
                 return {...state, lngLat: action.payload};
+            case locationActions.createMarker:
+                const markerRef = state.marker;
+                markerRef.current = new mapboxgl.Marker({color: action.payload});
+                return {...state, marker: markerRef};
+            default:
+                return state;
         }
     }
 
     const [startLocation, startLocationDispatch] = useReducer(locationReducer, initialLocationState);
-    
-    // const [startSuggestions, setStartSuggestions] = useState<any>();
-    // const [startQuery, setStartQuery] = useState('');
-    // const [startInput, setStartInput] = useState('');
     const startDebounce = useDebounce(startLocation.query, 500);
-    // const [startLngLat, setStartLngLat] = useState<mapboxgl.LngLat>();
 
 
     const [endLngLat, setEndLngLat] = useState<mapboxgl.LngLat>();
@@ -279,12 +295,6 @@ export default function Maps() {
     }
 
     useEffect(() => {
-        if (startLocation.lngLat != undefined) {
-            placeMarker(startLocation.lngLat, startMarker);
-        }
-    }, [startLocation.lngLat]);
-
-    useEffect(() => {
         if (endLngLat != undefined) {
             placeMarker(endLngLat, endMarker);
         }
@@ -313,7 +323,7 @@ export default function Maps() {
         const newCarbon: NameValue = {};
 
         await Promise.all(travelTypes.map((travelType: TransitTypes) => {
-            if (travelType === 'public-transport') return;
+            if (travelType === 'public-transport' || startLocation.lngLat == undefined) return;
 
             return directionService.getDirections({
                 profile: travelType,
