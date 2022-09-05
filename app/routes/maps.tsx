@@ -264,7 +264,7 @@ export default function Maps() {
     
     useEffect(() => {
         if (startDebounce === '') {
-            startLocationDispatch({type: locationActions.updateSuggestions, payload: ['...']});
+            startLocationDispatch({type: locationActions.updateSuggestions, payload: undefined});
         } else {
             const asyncCallback = async () => {
                 startLocationDispatch({type: locationActions.updateSuggestions, payload: await geocode(startDebounce)});
@@ -275,7 +275,7 @@ export default function Maps() {
 
     useEffect(() => {
         if (endDebounce === '') {
-            endLocationDispatch({type: locationActions.updateSuggestions, payload: ['...']});
+            endLocationDispatch({type: locationActions.updateSuggestions, payload: undefined});
         } else {
             const asyncCallback = async () => {
                 endLocationDispatch({type: locationActions.updateSuggestions, payload: await geocode(endDebounce)});
