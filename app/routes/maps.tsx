@@ -1,4 +1,4 @@
-import { Combobox, Switch, Transition } from "@headlessui/react";
+import { Switch, Transition } from "@headlessui/react";
 import Map, { Layer, MapRef, Source } from 'react-map-gl';
 import { LinksFunction, LoaderArgs } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
@@ -297,7 +297,7 @@ export default function Maps() {
     const transitService = new google.maps.DirectionsService();
 
     const calculateRoute = async () => {
-        if (startLocation.input === '' || endLocation.input === '' || startLocation.lngLat == null || endLocation.lngLat == null) {
+        if (startLocation.lngLat == undefined || endLocation.lngLat == undefined) {
             return;
         }
 
@@ -307,16 +307,16 @@ export default function Maps() {
         const newCarbon: NameValue = {};
 
         await Promise.all(travelTypes.map((travelType: TransitTypes) => {
-            if (travelType === 'public-transport' || startLocation.lngLat == undefined || endLocation.lngLat == undefined) return;
+            if (travelType === 'public-transport') return;
 
             return directionService.getDirections({
                 profile: travelType,
                 waypoints: [
                 {
-                    coordinates: [startLocation.lngLat.lng, startLocation.lngLat.lat],
+                    coordinates: [startLocation.lngLat!.lng, startLocation.lngLat!.lat],
                 },
                 {
-                    coordinates: [endLocation.lngLat.lng, endLocation.lngLat.lat],
+                    coordinates: [endLocation.lngLat!.lng, endLocation.lngLat!.lat],
                 }
                 ],
                 overview: "full",
@@ -402,14 +402,6 @@ export default function Maps() {
             });
     }
 
-
-    const placeMarker = (latLng: mapboxgl.LngLat | null, marker: MutableRefObject<mapboxgl.Marker | undefined>) => {
-        if (marker.current !== undefined && latLng !== null && mapboxMap != undefined) {
-            marker.current.setLngLat(latLng);
-            marker.current.addTo(mapboxMap);
-        }
-    }
-
     const getFeatureFromCoordinates = (latLng: mapboxgl.LngLat | null) : Promise<MapboxGeocoder.Result> => {
         return geocodingClient.reverseGeocode({
             query: [latLng!.lng, latLng!.lat],
@@ -437,13 +429,9 @@ export default function Maps() {
         if (startLocation.input !== null && markerSelector === 'startLocation') {
             const feature = await getFeatureFromCoordinates(lngLat);
             startLocationDispatch({type: locationActions.mapClick, payload: {input: getPlaceName(feature, lngLat), lngLat: lngLat}});
-            // startLocationDispatch({type: locationActions.updateInput, payload: getPlaceName(feature, lngLat)});
-            // startLocationDispatch({type: locationActions.updateLngLat, payload: lngLat});
         } else if (endLocation.input !== null && markerSelector === 'endLocation') {
             const feature = await getFeatureFromCoordinates(lngLat);
             endLocationDispatch({type: locationActions.mapClick, payload: {input: getPlaceName(feature, lngLat), lngLat: lngLat}});
-            // endLocationDispatch({type: locationActions.updateInput, payload: getPlaceName(feature, lngLat)});
-            // endLocationDispatch({type: locationActions.updateLngLat, payload: lngLat});
         }
         setMarkerSelector('');
     }
@@ -505,7 +493,7 @@ export default function Maps() {
                 leaveFrom="opacity-100 rotate-0 scale-100 "
                 leaveTo="opacity-0 scale-95 "
             >
-                <Form className="z-1 flex-grow w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl sm:left-1 md:flex-row md:left-5 lg:left-1/4 xl:left-auto">
+                <Form className="z-1 w-screen flex-col absolute px-2 shadow-lg text-xl bg-gray-200 sm:w-auto sm:py-1 sm:px-3 sm:rounded-b-3xl sm:left-1 md:flex-row md:left-5 lg:left-1/4 xl:left-auto">
                     <div className="border-separate mb-1 sm:px-4 sm:flex sm:items-start sm:justify-between sm:space-x-1 md:mb-2">
                         <div className="md:mr-4">
                             <label className="flex flex-row text-gray-700 text-sm font-bold sm:mb-0.5" htmlFor="origin">
