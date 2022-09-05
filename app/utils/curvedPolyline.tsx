@@ -28,6 +28,7 @@ export default function CurvedPolyline(origin: mapboxgl.LngLat | undefined, dest
     };
 
     route = toWgs84(route);
+    // @ts-ignore route is defined using GeoJSON library like the rest of the project, but @turf/helpers has a slightly different definition
     const lineDist = lineDistance(route, {units: 'kilometers'});
     const midPoint = midpoint(route.coordinates[0], route.coordinates[1]);
     const center = destination(
